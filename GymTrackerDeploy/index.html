@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GymTracker Pro | Forza Totale</title>
+  <!-- Import Map for Modern Browser ESM -->
+  <script type="importmap">
+    {
+      "imports": {
+        "react": "https://esm.sh/react@18",
+        "react-dom/client": "https://esm.sh/react-dom@18/client",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+      }
+    }
+    </script>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #080808;
+      color: #efefef;
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    #loader {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid rgba(200, 255, 0, 0.1);
+      border-top-color: #C8FF00;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    #root:not(:empty)+#loader {
+      display: none;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+  <div id="loader">
+    <div class="spinner"></div>
+    <div style="font-size: 14px; color: #686868; letter-spacing: 0.1em; font-weight: bold;">AVVIO GYMTRACKER...</div>
+  </div>
+
+  <!-- Babel for on-the-fly JSX transformation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script type="text/babel" data-type="module">
+    import React, { useState, useEffect, useRef } from 'react';
+    import ReactDOM from 'react-dom/client';
+    import { createClient } from '@supabase/supabase-js';
+
+    // --- CONFIGURAZIONE SUPABASE ---
+    // Inserisci qui le tue credenziali da supabase.com -> Settings -> API
+    const SUPABASE_URL = 'https://dqukgqcqbehafzusrwyx.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_Qzv8iSjbVqLk7eXScXSjrQ_i4NO-RAK';
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // --- INIZIO SORGENTE GYMTRACKER ---
+
+    const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+    const PLACEHOLDER = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect fill="#161616" width="400" height="300"/><text fill="#2a2a2a" font-size="90" font-family="sans-serif" x="200" y="185" text-anchor="middle">💪</text></svg>')}`;
+
+    const getImgs = (path) => [
+      `https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/${path}/0.jpg`,
+      `https://raw.githubusercontent.com/yuhonas/free-exercise-db/main/exercises/${path}/1.jpg`
+    ];
+
+    const PRESETS = [
+      { nome: "Panca Piana Bilanciere", cat: "Petto", imgs: getImgs("Barbell_Bench_Press_-_Medium_Grip") },
+      { nome: "Panca Inclinata Bilanciere", cat: "Petto", imgs: getImgs("Barbell_Incline_Bench_Press_-_Medium_Grip") },
+      { nome: "Panca Declinata Bilanciere", cat: "Petto", imgs: getImgs("Decline_Barbell_Bench_Press") },
+      { nome: "Spinte Manubri Panca Piana", cat: "Petto", imgs: getImgs("Dumbbell_Bench_Press") },
+      { nome: "Spinte Manubri Panca Inclinata", cat: "Petto", imgs: getImgs("Incline_Dumbbell_Press") },
+      { nome: "Croci con Manubri", cat: "Petto", imgs: getImgs("Dumbbell_Flyes") },
+      { nome: "Croci Panca Inclinata", cat: "Petto", imgs: getImgs("Incline_Dumbbell_Flyes") },
+      { nome: "Croci ai Cavi", cat: "Petto", imgs: getImgs("Cable_Crossover") },
+      { nome: "Push-up (Piegamenti)", cat: "Petto", imgs: getImgs("Pushups") },
+      { nome: "Chest Press Macchina", cat: "Petto", imgs: getImgs("Machine_Bench_Press") },
+      { nome: "Pectoral Machine", cat: "Petto", imgs: getImgs("Butterfly") },
+      { nome: "Dip Parallele (Focus Petto)", cat: "Petto", imgs: getImgs("Dips_-_Chest_Version") },
+      { nome: "Trazioni (Pull-up)", cat: "Schiena", imgs: getImgs("Pullups") },
+      { nome: "Trazioni Presa Inversa (Chin-up)", cat: "Schiena", imgs: getImgs("Chin-Up") },
+      { nome: "Lat Machine Avanti", cat: "Schiena", imgs: getImgs("Wide-Grip_Lat_Pulldown") },
+      { nome: "Lat Machine Presa Inversa", cat: "Schiena", imgs: getImgs("Underhand_Cable_Pulldowns") },
+      { nome: "Pulley Basso", cat: "Schiena", imgs: getImgs("Seated_Cable_Rows") },
+      { nome: "Rematore con Bilanciere", cat: "Schiena", imgs: getImgs("Barbell_Row") },
+      { nome: "Rematore con Manubrio", cat: "Schiena", imgs: getImgs("One-Arm_Dumbbell_Row") },
+      { nome: "Stacco da Terra", cat: "Schiena", imgs: getImgs("Barbell_Deadlift") },
+      { nome: "Pull-down Braccia Tese", cat: "Schiena", imgs: getImgs("Straight-Arm_Pulldown") },
+      { nome: "T-Bar Row", cat: "Schiena", imgs: getImgs("T-Bar_Row_with_Handle") },
+      { nome: "Scrollate (Shrugs) Bilanciere", cat: "Schiena", imgs: getImgs("Barbell_Shrug") },
+      { nome: "Squat con Bilanciere", cat: "Gambe", imgs: getImgs("Barbell_Full_Squat") },
+      { nome: "Front Squat", cat: "Gambe", imgs: getImgs("Front_Barbell_Squat") },
+      { nome: "Leg Press 45°", cat: "Gambe", imgs: getImgs("Leg_Press") },
+      { nome: "Affondi con Manubri", cat: "Gambe", imgs: getImgs("Dumbbell_Lunges") },
+      { nome: "Bulgarian Split Squat", cat: "Gambe", imgs: getImgs("Split_Squats") },
+      { nome: "Leg Extension", cat: "Gambe", imgs: getImgs("Leg_Extension") },
+      { nome: "Leg Curl Seduto", cat: "Gambe", imgs: getImgs("Seated_Leg_Curl") },
+      { nome: "Leg Curl Sdraiato", cat: "Gambe", imgs: getImgs("Lying_Leg_Curls") },
+      { nome: "Romanian Deadlift (RDL)", cat: "Gambe", imgs: getImgs("Romanian_Deadlift") },
+      { nome: "Calf in Piedi", cat: "Gambe", imgs: getImgs("Standing_Calf_Raises") },
+      { nome: "Calf Seduto", cat: "Gambe", imgs: getImgs("Seated_Calf_Raise") },
+      { nome: "Hip Thrust", cat: "Gambe", imgs: getImgs("Barbell_Hip_Thrust") },
+      { nome: "Military Press (Lento Avanti)", cat: "Spalle", imgs: getImgs("Barbell_Shoulder_Press") },
+      { nome: "Shoulder Press Manubri", cat: "Spalle", imgs: getImgs("Dumbbell_Shoulder_Press") },
+      { nome: "Alzate Laterali", cat: "Spalle", imgs: getImgs("Dumbbell_Lateral_Raise") },
+      { nome: "Alzate Frontali Manubri", cat: "Spalle", imgs: getImgs("Front_Dumbbell_Raise") },
+      { nome: "Alzate a 90° (Posteriori)", cat: "Spalle", imgs: getImgs("Reverse_Flyes") },
+      { nome: "Face Pull", cat: "Spalle", imgs: getImgs("Face_Pull") },
+      { nome: "Tirate al Mento", cat: "Spalle", imgs: getImgs("Upright_Barbell_Row") },
+      { nome: "Scrollate Manubri", cat: "Spalle", imgs: getImgs("Dumbbell_Shrug") },
+      { nome: "Curl con Bilanciere", cat: "Bicipiti", imgs: getImgs("Barbell_Curl") },
+      { nome: "Curl Manubri Alternato", cat: "Bicipiti", imgs: getImgs("Dumbbell_Alternate_Bicep_Curl") },
+      { nome: "Hammer Curl (A Martello)", cat: "Bicipiti", imgs: getImgs("Hammer_Curls") },
+      { nome: "Curl Panca Scott", cat: "Bicipiti", imgs: getImgs("Preacher_Curl") },
+      { nome: "Curl ai Cavi Basso", cat: "Bicipiti", imgs: getImgs("Cable_Curl") },
+      { nome: "Curl Concentrato", cat: "Bicipiti", imgs: getImgs("Concentration_Curls") },
+      { nome: "Pushdown ai Cavi (Barra)", cat: "Tricipiti", imgs: getImgs("Cable_Pushdown") },
+      { nome: "Pushdown ai Cavi (Corda)", cat: "Tricipiti", imgs: getImgs("Triceps_Pushdown_-_Rope_Attachment") },
+      { nome: "French Press Bilanciere", cat: "Tricipiti", imgs: getImgs("EZ-Bar_Skullcrusher") },
+      { nome: "Estensioni Dietro Nuca", cat: "Tricipiti", imgs: getImgs("Seated_Triceps_Press") },
+      { nome: "Kickback Manubrio", cat: "Tricipiti", imgs: getImgs("Tricep_Dumbbell_Kickback") },
+      { nome: "Panca Piana Presa Stretta", cat: "Tricipiti", imgs: getImgs("Close-Grip_Barbell_Bench_Press") },
+      { nome: "Dip su Panca (Bench Dips)", cat: "Tricipiti", imgs: getImgs("Bench_Dips") },
+      { nome: "Crunch", cat: "Core", imgs: getImgs("Crunch") },
+      { nome: "Plank", cat: "Core", imgs: getImgs("Plank") },
+      { nome: "Leg Raise alla Sbarra", cat: "Core", imgs: getImgs("Hanging_Leg_Raise") },
+      { nome: "Russian Twist", cat: "Core", imgs: getImgs("Russian_Twist") },
+      { nome: "Sit-up", cat: "Core", imgs: getImgs("Sit-Up") },
+      { nome: "Ab Roller", cat: "Core", imgs: getImgs("Ab_Roller") },
+    ];
+
+    const mkEx = (p, o = {}) => ({
+      id: uid(), nome: p.nome, imgs: [...p.imgs],
+      serie: 3, ripetizioni: "10", peso: 0, recupero: 90, note: "", ...o
+    });
+
+    const buildDefault = () => ({
+      id: "s1", nome: "La Mia Scheda",
+      giorni: [
+        {
+          id: uid(), nome: "Giorno A — Push", esercizi: [
+            mkEx(PRESETS[0], { serie: 4, ripetizioni: "8", peso: 80 }),
+            mkEx(PRESETS[4], { serie: 3, ripetizioni: "10", peso: 24 }),
+            mkEx(PRESETS[33], { serie: 4, ripetizioni: "8", peso: 50 }),
+            mkEx(PRESETS[35], { serie: 3, ripetizioni: "12", peso: 12 }),
+            mkEx(PRESETS[48], { serie: 3, ripetizioni: "12", peso: 25 }),
+          ]
+        },
+        {
+          id: uid(), nome: "Giorno B — Pull", esercizi: [
+            mkEx(PRESETS[12], { serie: 4, ripetizioni: "8", note: "Peso corporeo" }),
+            mkEx(PRESETS[17], { serie: 4, ripetizioni: "8", peso: 70 }),
+            mkEx(PRESETS[14], { serie: 3, ripetizioni: "10", peso: 60 }),
+            mkEx(PRESETS[38], { serie: 3, ripetizioni: "12", peso: 20 }),
+            mkEx(PRESETS[42], { serie: 3, ripetizioni: "12", peso: 30 }),
+          ]
+        },
+        {
+          id: uid(), nome: "Giorno C — Legs", esercizi: [
+            mkEx(PRESETS[23], { serie: 5, ripetizioni: "5", peso: 100, recupero: 120 }),
+            mkEx(PRESETS[25], { serie: 3, ripetizioni: "10", peso: 150 }),
+            mkEx(PRESETS[28], { serie: 3, ripetizioni: "12", peso: 40 }),
+            mkEx(PRESETS[29], { serie: 3, ripetizioni: "12", peso: 45 }),
+            mkEx(PRESETS[32], { serie: 4, ripetizioni: "15", peso: 20 }),
+          ]
+        },
+      ]
+    });
+
+    const CSS = `
+        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Syne:wght@400;500;600;700;800&display=swap');
+        *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+        :root{
+          --bg:#080808; --s1:#111111; --s2:#191919; --s3:#242424;
+          --b:#272727; --acc:#C8FF00; --acc-d:rgba(200,255,0,.13); --acc-d2:rgba(200,255,0,.07);
+          --tx:#efefef; --tx-m:#686868; --tx-d:#9a9a9a;
+          --red:#FF4444; --red-d:rgba(255,68,68,.14);
+          --r:12px; --rs:8px;
+        }
+        body{background:var(--bg);color:var(--tx);font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased;}
+        .app{min-height:100vh;max-width:480px;margin:0 auto;position:relative;}
+        ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--b);border-radius:2px}
+        input,button{font-family:'Syne',sans-serif;}
+        .btn{display:flex;align-items:center;justify-content:center;gap:7px;border:none;cursor:pointer;border-radius:var(--r);transition:all .13s;user-select:none;-webkit-tap-highlight-color:transparent;font-weight:600;}
+        .btn:active{transform:scale(.97);}
+        .btn-p{background:var(--acc);color:#000;padding:17px 28px;font-size:15px;font-weight:800;}
+        .btn-p:hover{background:#d6ff1a;}
+        .btn-g{background:transparent;color:var(--tx-d);padding:10px 16px;font-size:13px;border:1px solid var(--b);}
+        .btn-g:hover{border-color:var(--tx-d);color:var(--tx);}
+        .btn-red{background:var(--red-d);color:var(--red);padding:10px 14px;font-size:13px;border:1px solid transparent;}
+        .btn-red:hover{border-color:var(--red);}
+        .btn-ic{background:var(--s2);color:var(--tx-d);padding:8px;border-radius:var(--rs);width:36px;height:36px;font-size:15px;flex-shrink:0;}
+        .btn-ic:hover{background:var(--s3);color:var(--tx);}
+        .inp{background:var(--s2);border:1px solid var(--b);color:var(--tx);border-radius:var(--rs);padding:12px 14px;font-size:14px;width:100%;outline:none;transition:border-color .13s;}
+        .inp:focus{border-color:var(--acc);}
+        .inp::placeholder{color:var(--tx-m);}
+        .lbl{font-size:11px;font-weight:700;color:var(--tx-d);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:7px;}
+        .tag{display:inline-flex;align-items:center;padding:3px 9px;border-radius:100px;font-size:11px;font-weight:700;letter-spacing:.04em;background:var(--acc-d2);color:var(--acc);border:1px solid rgba(200,255,0,.18);}
+        .hdr{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 15px;border-bottom:1px solid var(--b);position:sticky;top:0;background:var(--bg);z-index:10;}
+        .hdr-title{font-size:12px;font-weight:700;color:var(--tx-m);letter-spacing:.09em;text-transform:uppercase;}
+        .home{display:flex;flex-direction:column;min-height:100vh;padding:36px 26px;}
+        .home-logo{flex:1;display:flex;flex-direction:column;justify-content:center;}
+        .home-brand{font-size:11px;font-weight:700;color:var(--tx-m);letter-spacing:.14em;text-transform:uppercase;margin-bottom:14px;}
+        .home-t{font-family:'Bebas Neue',sans-serif;font-size:80px;line-height:.88;letter-spacing:-.01em;}
+        .home-t-acc{color:var(--acc);}
+        .home-sub{margin-top:18px;color:var(--tx-m);font-size:14px;line-height:1.6;}
+        .home-acts{display:flex;flex-direction:column;gap:11px;padding-bottom:16px;}
+        .home-btn{background:var(--acc);color:#000;border:none;border-radius:var(--r);padding:20px 22px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-weight:800;font-size:15px;transition:all .13s;user-select:none;-webkit-tap-highlight-color:transparent;}
+        .home-btn:active{transform:scale(.98);}
+        .home-btn:hover{background:#d6ff1a;}
+        .home-btn.sec{background:var(--s1);color:var(--tx);border:1px solid var(--b);}
+        .home-btn.sec:hover{border-color:rgba(200,255,0,.35);background:var(--s2);}
+        .page{min-height:100vh;display:flex;flex-direction:column;}
+        .page-body{padding:16px;flex:1;display:flex;flex-direction:column;gap:11px;overflow-y:auto;}
+        .sch-name{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--tx);font-family:'Bebas Neue',sans-serif;font-size:30px;outline:none;width:100%;transition:border-color .13s;padding:2px 0;cursor:text;}
+        .sch-name:focus{border-bottom-color:var(--acc);}
+        .g-card{background:var(--s1);border:1px solid var(--b);border-radius:var(--r);overflow:hidden;transition:border-color .13s;}
+        .g-card:hover{border-color:rgba(200,255,0,.25);}
+        .g-hdr{padding:15px 18px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;}
+        .g-name{font-family:'Bebas Neue',sans-serif;font-size:21px;letter-spacing:.03em;}
+        .g-meta{font-size:12px;color:var(--tx-m);margin-top:2px;}
+        .g-tags{padding:0 18px 12px;display:flex;gap:7px;flex-wrap:wrap;}
+        .g-play{margin:0 18px 15px;background:var(--acc-d2);border:1px solid rgba(200,255,0,.15);color:var(--acc);padding:9px 14px;border-radius:var(--rs);font-size:13px;font-weight:700;display:inline-flex;align-items:center;gap:7px;cursor:pointer;transition:all .13s;-webkit-tap-highlight-color:transparent;}
+        .g-play:hover{background:var(--acc-d);}
+        .g-play:active{transform:scale(.97);}
+        .ex-card{background:var(--s1);border:1px solid var(--b);border-radius:var(--r);overflow:hidden;transition:border-color .13s;}
+        .ex-row{display:flex;align-items:center;gap:11px;padding:13px 15px;}
+        .ex-thumb{width:54px;height:38px;border-radius:6px;object-fit:cover;background:var(--s2);flex-shrink:0;}
+        .ex-info{flex:1;min-width:0;cursor:pointer;}
+        .ex-n{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+        .ex-s{font-size:12px;color:var(--tx-m);margin-top:2px;}
+        .ex-acts{display:flex;gap:5px;}
+        .mb{position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:100;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(5px);}
+        .modal{background:var(--s1);border-top-left-radius:22px;border-top-right-radius:22px;border:1px solid var(--b);border-bottom:none;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;padding:24px 20px 44px;animation:su .22s ease;}
+        @keyframes su{from{transform:translateY(28px);opacity:0}to{transform:translateY(0);opacity:1}}
+        .m-title{font-family:'Bebas Neue',sans-serif;font-size:29px;margin-bottom:22px;}
+        .fg{margin-bottom:15px;}
+        .fr2{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
+        .fr3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;}
+        .ig{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+        .it-wrap{position:relative;}
+        .it{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:var(--rs);background:var(--s2);display:block;}
+        .it-rm{position:absolute;top:4px;right:4px;width:20px;height:20px;background:rgba(255,68,68,.92);color:#fff;border:none;border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+        .preset-list{display:flex;flex-direction:column;gap:0;background:var(--s2);border-radius:var(--rs);overflow:hidden;border:1px solid var(--b);}
+        .pr-item{padding:10px 14px;display:flex;align-items:center;gap:10px;cursor:pointer;transition:background .1s;border-bottom:1px solid var(--b);}
+        .pr-item:last-child{border-bottom:none;}
+        .pr-item:hover{background:var(--s3);}
+        .pr-img{width:36px;height:27px;object-fit:cover;border-radius:4px;background:var(--s3);}
+        .pr-n{font-size:13px;font-weight:600;flex:1;}
+        .ds-item{background:var(--s2);border:1px solid var(--b);border-radius:var(--r);padding:17px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:all .13s;-webkit-tap-highlight-color:transparent;}
+        .ds-item:hover{border-color:var(--acc);background:var(--acc-d2);}
+        .ds-item:active{transform:scale(.99);}
+        .ds-name{font-family:'Bebas Neue',sans-serif;font-size:21px;}
+        .ds-meta{font-size:12px;color:var(--tx-m);margin-top:2px;}
+        .wk{min-height:100vh;display:flex;flex-direction:column;background:var(--bg);}
+        .wk-prg{height:3px;background:var(--s2);}
+        .wk-prg-f{height:100%;background:var(--acc);transition:width .4s ease;}
+        .wk-hdr{padding:15px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--b);}
+        .wk-day{font-size:12px;color:var(--tx-m);font-weight:600;text-transform:uppercase;letter-spacing:.08em;}
+        .wk-cnt{font-size:13px;color:var(--tx-d);font-weight:500;}
+        .wk-body{flex:1;display:flex;flex-direction:column;padding-bottom:24px;overflow-y:auto;}
+        .wk-ex-name{font-family:'Bebas Neue',sans-serif;font-size:50px;line-height:.95;padding:22px 20px 6px;letter-spacing:.02em;}
+        .wk-img-wrap{position:relative;background:var(--s1);margin:0 20px;border-radius:var(--r);overflow:hidden;aspect-ratio:16/9;}
+        .wk-img{width:100%;height:100%;object-fit:cover;display:block;}
+        .cr-btn{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,.62);color:#fff;border:none;width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:16px;backdrop-filter:blur(4px);transition:background .13s;}
+        .cr-btn:hover{background:rgba(0,0,0,.82);}
+        .cr-dots{position:absolute;bottom:9px;left:50%;transform:translateX(-50%);display:flex;gap:5px;}
+        .cr-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.35);transition:background .13s;}
+        .cr-dot.on{background:#fff;}
+        .wk-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:11px;padding:18px 20px 0;}
+        .st-box{background:var(--s1);border:1px solid var(--b);border-radius:var(--r);padding:14px 12px;text-align:center;}
+        .st-v{font-family:'Bebas Neue',sans-serif;font-size:34px;line-height:1;}
+        .st-v.acc{color:var(--acc);}
+        .st-l{font-size:11px;color:var(--tx-m);text-transform:uppercase;letter-spacing:.06em;margin-top:4px;font-weight:700;}
+        .wk-series{display:flex;align-items:center;gap:8px;padding:16px 20px 0;flex-wrap:wrap;}
+        .sp{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;border:2px solid var(--b);color:var(--tx-m);transition:all .15s;flex-shrink:0;}
+        .sp.done{background:var(--acc);border-color:var(--acc);color:#000;}
+        .sp.curr{background:transparent;border-color:var(--acc);color:var(--acc);}
+        .sp.todo{background:var(--s1);}
+        .wk-note{padding:11px 20px 0;font-size:13px;color:var(--tx-m);font-style:italic;}
+        .nxt-prev{margin:16px 20px 0;padding:13px 15px;background:var(--s1);border:1px solid var(--b);border-radius:var(--r);display:flex;align-items:center;gap:12px;}
+        .nxt-thumb{width:48px;height:35px;object-fit:cover;border-radius:6px;background:var(--s2);flex-shrink:0;}
+        .nxt-lbl{font-size:11px;color:var(--tx-m);text-transform:uppercase;letter-spacing:.06em;font-weight:700;}
+        .nxt-n{font-size:14px;font-weight:700;}
+        .nxt-s{font-size:12px;color:var(--tx-d);margin-top:1px;}
+        .wk-acts{padding:20px;display:flex;flex-direction:column;gap:10px;margin-top:auto;}
+        .btn-done{background:var(--acc);color:#000;border:none;border-radius:var(--r);padding:19px;font-weight:900;font-size:16px;cursor:pointer;transition:all .13s;letter-spacing:.03em;display:flex;align-items:center;justify-content:center;gap:10px;-webkit-tap-highlight-color:transparent;width:100%;}
+        .btn-done:active{transform:scale(.98);}
+        .btn-done:hover{background:#d6ff1a;}
+        .btn-skip{background:var(--s1);border:1px solid var(--b);color:var(--tx-d);border-radius:var(--r);padding:14px;font-weight:600;font-size:14px;cursor:pointer;transition:all .13s;-webkit-tap-highlight-color:transparent;width:100%;}
+        .btn-skip:hover{border-color:var(--tx-d);color:var(--tx);}
+        .rest-ov{position:fixed;inset:0;background:var(--bg);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;animation:fi .2s ease;}
+        @keyframes fi{from{opacity:0}to{opacity:1}}
+        .rest-lbl{font-size:12px;font-weight:700;color:var(--tx-m);text-transform:uppercase;letter-spacing:.12em;margin-bottom:16px;}
+        .rest-t{font-family:'Bebas Neue',sans-serif;font-size:128px;line-height:1;color:var(--acc);letter-spacing:-.02em;transition:color .3s;}
+        .rest-t.urg{color:var(--red);}
+        .rest-nxt{margin-top:28px;text-align:center;}
+        .rest-nxt-lbl{font-size:12px;color:var(--tx-m);text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;font-weight:700;}
+        .rest-nxt-n{font-family:'Bebas Neue',sans-serif;font-size:30px;}
+        .rest-acts{margin-top:40px;width:100%;max-width:270px;}
+        .done-pg{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;text-align:center;}
+        .done-ico{font-size:80px;margin-bottom:22px;animation:bnc .5s ease;}
+        @keyframes bnc{0%,100%{transform:scale(1)}50%{transform:scale(1.2)}}
+        .done-t{font-family:'Bebas Neue',sans-serif;font-size:58px;line-height:.95;margin-bottom:12px;}
+        .done-s{color:var(--tx-d);font-size:15px;line-height:1.6;margin-bottom:40px;}
+        .empty{text-align:center;padding:48px 24px;color:var(--tx-m);}
+        .empty-ic{font-size:44px;margin-bottom:14px;}
+        .empty-t{font-size:14px;line-height:1.7;}
+        `;
+
+    function GymTracker() {
+      const [scheda, setScheda] = useState(buildDefault());
+      const [view, setView] = useState('home');
+      const [isLoading, setIsLoading] = useState(true);
+
+      // Caricamento dal Database (o LocalStorage come fallback)
+      useEffect(() => {
+        const loadData = async () => {
+          try {
+            if (SUPABASE_URL.includes("INSERISCI_QUI")) throw new Error("Supabase non ancora configurato.");
+            const { data, error } = await supabase.from('gym_data').select('content').eq('id', 1).single();
+
+            if (error && error.code !== 'PGRST116') throw error; // Ignora eccezione se non trova nessuna riga (0 rows)
+
+            if (data && data.content) {
+              setScheda(data.content);
+            } else {
+              const s = localStorage.getItem('gym_v3');
+              if (s) setScheda(JSON.parse(s));
+            }
+          } catch (e) {
+            console.error("Avviso: Impossibile caricare da Supabase (fallito o non configurato) -> fallback su LocalStorage locale", e);
+            const s = localStorage.getItem('gym_v3');
+            if (s) setScheda(JSON.parse(s));
+          } finally {
+            setIsLoading(false);
+          }
+        };
+        loadData();
+      }, []);
+
+      // Salvataggio nel Database Supabase + LocalStorage
+      useEffect(() => {
+        if (isLoading) return;
+        localStorage.setItem('gym_v3', JSON.stringify(scheda));
+
+        const saveData = async () => {
+          try {
+            if (SUPABASE_URL.includes("INSERISCI_QUI")) return;
+
+            const { error } = await supabase
+              .from('gym_data')
+              .upsert({ id: 1, content: scheda }, { onConflict: 'id' });
+
+            if (error) throw error;
+          } catch (e) {
+            console.error("Errore salvataggio Supabase:", e);
+          }
+        };
+        saveData();
+      }, [scheda, isLoading]);
+
+      const [selGiornoId, setSelGiornoId] = useState(null);
+      const [editModal, setEditModal] = useState(null);
+      const [wGiornoId, setWGiornoId] = useState(null);
+      const [exIdx, setExIdx] = useState(0);
+      const [serieIdx, setSerieIdx] = useState(0);
+      const [isResting, setIsResting] = useState(false);
+      const [restTime, setRestTime] = useState(0);
+      const [imgIdx, setImgIdx] = useState(0);
+      const timerRef = useRef(null);
+      const advRef = useRef(null);
+      advRef.current = () => {
+        if (!wGiorno) return;
+        const totalS = wGiorno.esercizi[exIdx]?.serie || 1;
+        if (serieIdx + 1 < totalS) {
+          setSerieIdx(s => s + 1);
+          setImgIdx(0);
+        } else if (exIdx + 1 < wGiorno.esercizi.length) {
+          setExIdx(e => e + 1);
+          setSerieIdx(0);
+          setImgIdx(0);
+        } else {
+          setView('complete');
+        }
+      };
+      useEffect(() => {
+        if (!isResting) return;
+        if (restTime > 0) {
+          timerRef.current = setTimeout(() => setRestTime(t => t - 1), 1000);
+        } else {
+          setIsResting(false);
+          advRef.current();
+        }
+        return () => clearTimeout(timerRef.current);
+      }, [isResting, restTime]);
+      const wGiorno = scheda.giorni.find(g => g.id === wGiornoId);
+      const currEx = wGiorno?.esercizi[exIdx];
+      const nextEx = wGiorno?.esercizi[exIdx + 1];
+      const selGiorno = scheda.giorni.find(g => g.id === selGiornoId);
+      const startWorkout = (giornoId) => {
+        setWGiornoId(giornoId); setExIdx(0); setSerieIdx(0);
+        setIsResting(false); setImgIdx(0); setView('workout');
+      };
+      const completeSerie = () => {
+        const ex = wGiorno?.esercizi[exIdx];
+        if (!ex) return;
+        const isLastS = serieIdx + 1 >= ex.serie;
+        const isLastEx = exIdx + 1 >= wGiorno.esercizi.length;
+        if (isLastS && isLastEx) { setView('complete'); return; }
+        setRestTime(ex.recupero || 60);
+        setIsResting(true);
+      };
+      const skipRest = () => { clearTimeout(timerRef.current); setIsResting(false); advRef.current(); };
+      const updSchedaNome = (v) => setScheda(s => ({ ...s, nome: v }));
+      const addGiorno = () => setScheda(s => ({ ...s, giorni: [...s.giorni, { id: uid(), nome: `Giorno ${s.giorni.length + 1}`, esercizi: [] }] }));
+      const delGiorno = (id) => setScheda(s => ({ ...s, giorni: s.giorni.filter(g => g.id !== id) }));
+      const updGiornoNome = (id, v) => setScheda(s => ({ ...s, giorni: s.giorni.map(g => g.id === id ? { ...g, nome: v } : g) }));
+      const addEsercizio = (gId, preset) => {
+        const e = preset ? { id: uid(), nome: preset.nome, imgs: [...preset.imgs], serie: 3, ripetizioni: "10", peso: 0, recupero: 90, note: "" }
+          : { id: uid(), nome: "Nuovo Esercizio", imgs: [], serie: 3, ripetizioni: "10", peso: 0, recupero: 90, note: "" };
+        setScheda(s => ({ ...s, giorni: s.giorni.map(g => g.id === gId ? { ...g, esercizi: [...g.esercizi, e] } : g) }));
+        return e.id;
+      };
+      const updEsercizio = (gId, eId, data) => setScheda(s => ({ ...s, giorni: s.giorni.map(g => g.id === gId ? { ...g, esercizi: g.esercizi.map(e => e.id === eId ? { ...e, ...data } : e) } : g) }));
+      const delEsercizio = (gId, eId) => setScheda(s => ({ ...s, giorni: s.giorni.map(g => g.id === gId ? { ...g, esercizi: g.esercizi.filter(e => e.id !== eId) } : g) }));
+      const moveEsercizio = (gId, eId, dir) => setScheda(s => ({
+        ...s, giorni: s.giorni.map(g => {
+          if (g.id !== gId) return g;
+          const a = [...g.esercizi]; const i = a.findIndex(e => e.id === eId);
+          if (dir === 'up' && i > 0) [a[i - 1], a[i]] = [a[i], a[i - 1]];
+          if (dir === 'down' && i < a.length - 1) [a[i], a[i + 1]] = [a[i + 1], a[i]];
+          return { ...g, esercizi: a };
+        })
+      }));
+      const editEx = editModal ? scheda.giorni.find(g => g.id === editModal.gId)?.esercizi.find(e => e.id === editModal.eId) : null;
+      return (
+        <div className="app">
+          <style>{CSS}</style>
+          {view === 'home' && (
+            <HomeView schedaNome={scheda.nome} hasGiorni={scheda.giorni.length > 0}
+              onScheda={() => setView('scheda')}
+              onStart={() => { if (scheda.giorni.length === 1) startWorkout(scheda.giorni[0].id); else setView('daySelect'); }} />
+          )}
+          {view === 'scheda' && (
+            <SchedaView scheda={scheda} onBack={() => setView('home')}
+              onUpdNome={updSchedaNome} onAdd={addGiorno} onDel={delGiorno}
+              onSel={(id) => { setSelGiornoId(id); setView('giorno'); }}
+              onStart={startWorkout} />
+          )}
+          {view === 'giorno' && selGiorno && (
+            <GiornoView giorno={selGiorno} onBack={() => setView('scheda')}
+              onUpdNome={(v) => updGiornoNome(selGiorno.id, v)}
+              onAdd={(p) => { const eId = addEsercizio(selGiorno.id, p); setEditModal({ gId: selGiorno.id, eId }); }}
+              onEdit={(eId) => setEditModal({ gId: selGiorno.id, eId })}
+              onDel={(eId) => delEsercizio(selGiorno.id, eId)}
+              onMove={(eId, d) => moveEsercizio(selGiorno.id, eId, d)}
+              onStart={() => startWorkout(selGiorno.id)} />
+          )}
+          {view === 'daySelect' && (
+            <div className="mb" onClick={() => setView('home')}>
+              <div className="modal" onClick={e => e.stopPropagation()} style={{ padding: '24px 20px 44px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <div className="m-title" style={{ marginBottom: 0 }}>Scegli il Giorno</div>
+                  <button className="btn btn-ic" onClick={() => setView('home')}>✕</button>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {scheda.giorni.map(g => (
+                    <div key={g.id} className="ds-item" onClick={() => { setView('home'); startWorkout(g.id); }}>
+                      <div><div className="ds-name">{g.nome}</div><div className="ds-meta">{g.esercizi.length} esercizi</div></div>
+                      <span style={{ color: 'var(--acc)', fontSize: 22 }}>▶</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+          {view === 'workout' && wGiorno && (
+            <>
+              <WorkoutView giorno={wGiorno} exIdx={exIdx} serieIdx={serieIdx}
+                imgIdx={imgIdx} setImgIdx={setImgIdx} nextEx={nextEx}
+                onDone={completeSerie}
+                onSkipEx={() => { if (exIdx + 1 < wGiorno.esercizi.length) { setExIdx(e => e + 1); setSerieIdx(0); setImgIdx(0); } else setView('complete'); }}
+                onBack={() => setView('home')} />
+              {isResting && (
+                <RestOverlay time={restTime}
+                  nextSerie={serieIdx + 1 < (currEx?.serie || 0) ? { name: currEx.nome, n: serieIdx + 2 } : null}
+                  nextEx={!((serieIdx + 1 < (currEx?.serie || 0))) ? nextEx : null}
+                  onSkip={skipRest} />
+              )}
+            </>
+          )}
+          {view === 'complete' && (
+            <CompleteView giornoName={wGiorno?.nome} totalEx={wGiorno?.esercizi.length}
+              onHome={() => setView('home')} />
+          )}
+          {editModal && editEx && (
+            <EsercizioModal esercizio={editEx}
+              onSave={(data) => { updEsercizio(editModal.gId, editModal.eId, data); setEditModal(null); }}
+              onDelete={() => { delEsercizio(editModal.gId, editModal.eId); setEditModal(null); }}
+              onClose={() => setEditModal(null)} />
+          )}
+        </div>
+      );
+    }
+
+    function HomeView({ schedaNome, hasGiorni, onScheda, onStart }) {
+      return (
+        <div className="home">
+          <div className="home-logo">
+            <div className="home-brand">GymTracker Pro</div>
+            <div className="home-t">FORZA<br /><span className="home-t-acc">TOTALE</span></div>
+            <div className="home-sub">Traccia ogni serie. Ogni ripetizione.<br />Raggiungi i tuoi obiettivi.</div>
+          </div>
+          <div className="home-acts">
+            {hasGiorni && (
+              <button className="home-btn" onClick={onStart}>
+                <span>▶ Inizia Allenamento</span>
+                <span style={{ fontSize: 20 }}>→</span>
+              </button>
+            )}
+            <button className="home-btn sec" onClick={onScheda}>
+              <span>📋 {schedaNome || 'La Mia Scheda'}</span>
+              <span style={{ fontSize: 20 }}>→</span>
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    function SchedaView({ scheda, onBack, onUpdNome, onAdd, onDel, onSel, onStart }) {
+      return (
+        <div className="page">
+          <div className="hdr">
+            <button className="btn btn-ic" onClick={onBack} style={{ background: 'transparent' }}>←</button>
+            <span className="hdr-title">La Mia Scheda</span>
+            <button className="btn btn-ic" onClick={onAdd} title="Aggiungi giorno" style={{ fontSize: 20, fontWeight: 900 }}>+</button>
+          </div>
+          <div style={{ padding: '18px 20px 8px' }}>
+            <input className="sch-name" value={scheda.nome} onChange={e => onUpdNome(e.target.value)} placeholder="Nome scheda..." />
+            <div style={{ fontSize: 12, color: 'var(--tx-m)', marginTop: 5, fontWeight: 600 }}>{scheda.giorni.length} giorni di allenamento</div>
+          </div>
+          <div className="page-body">
+            {scheda.giorni.length === 0 ? (
+              <div className="empty"><div className="empty-ic">📋</div><div className="empty-t">Nessun giorno nella scheda.<br />Premi + per aggiungerne uno.</div></div>
+            ) : scheda.giorni.map(g => (
+              <div key={g.id} className="g-card" onClick={() => onSel(g.id)}>
+                <div className="g-hdr">
+                  <div>
+                    <div className="g-name">{g.nome}</div>
+                    <div className="g-meta">{g.esercizi.length} esercizi</div>
+                  </div>
+                  <button className="btn btn-ic" style={{ color: 'var(--red)', background: 'var(--red-d)' }}
+                    onClick={e => { e.stopPropagation(); if (window.confirm('Eliminare questo giorno?')) onDel(g.id); }}>🗑</button>
+                </div>
+                {g.esercizi.length > 0 && (
+                  <div className="g-tags">
+                    {g.esercizi.slice(0, 4).map(e => <span key={e.id} className="tag">{e.nome.split(' ').slice(0, 2).join(' ')}</span>)}
+                    {g.esercizi.length > 4 && <span className="tag" style={{ background: 'var(--s2)', color: 'var(--tx-m)', border: '1px solid var(--b)' }}>+{g.esercizi.length - 4}</span>}
+                  </div>
+                )}
+                <div className="g-play" onClick={e => { e.stopPropagation(); onStart(g.id); }}>▶ Avvia Allenamento</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function GiornoView({ giorno, onBack, onUpdNome, onAdd, onEdit, onDel, onMove, onStart }) {
+      const [showPicker, setShowPicker] = useState(false);
+      const [search, setSearch] = useState('');
+      const filtered = PRESETS.filter(p => p.nome.toLowerCase().includes(search.toLowerCase()) || p.cat.toLowerCase().includes(search.toLowerCase()));
+      return (
+        <div className="page">
+          <div className="hdr">
+            <button className="btn btn-ic" onClick={onBack} style={{ background: 'transparent' }}>←</button>
+            <span className="hdr-title">Giorno</span>
+            <button className="btn btn-ic" onClick={onStart} style={{ background: 'var(--acc-d2)', color: 'var(--acc)', fontWeight: 900 }}>▶</button>
+          </div>
+          <div style={{ padding: '16px 20px 8px' }}>
+            <input className="sch-name" value={giorno.nome} onChange={e => onUpdNome(e.target.value)} placeholder="Nome giorno..." />
+            <div style={{ fontSize: 12, color: 'var(--tx-m)', marginTop: 5, fontWeight: 600 }}>{giorno.esercizi.length} esercizi</div>
+          </div>
+          <div className="page-body">
+            {giorno.esercizi.length === 0 ? (
+              <div className="empty"><div className="empty-ic">🏋️</div><div className="empty-t">Nessun esercizio ancora.<br />Premi + per aggiungerne uno.</div></div>
+            ) : giorno.esercizi.map((e, i) => (
+              <div key={e.id} className="ex-card">
+                <div className="ex-row">
+                  <img className="ex-thumb" src={e.imgs?.[0] || PLACEHOLDER} onError={ev => { ev.target.src = PLACEHOLDER; }} alt="" />
+                  <div className="ex-info" onClick={() => onEdit(e.id)}>
+                    <div className="ex-n">{e.nome}</div>
+                    <div className="ex-s">{e.serie}×{e.ripetizioni} rep · {e.peso > 0 ? `${e.peso} kg` : 'Peso corpo'} · {e.recupero}s rest</div>
+                  </div>
+                  <div className="ex-acts">
+                    <button className="btn btn-ic" style={{ fontSize: 12 }} onClick={() => onMove(e.id, 'up')} disabled={i === 0}>↑</button>
+                    <button className="btn btn-ic" style={{ fontSize: 12 }} onClick={() => onMove(e.id, 'down')} disabled={i === giorno.esercizi.length - 1}>↓</button>
+                    <button className="btn btn-ic" onClick={() => onEdit(e.id)}>✏️</button>
+                    <button className="btn btn-ic" style={{ color: 'var(--red)', background: 'var(--red-d)' }} onClick={() => { if (window.confirm('Eliminare?')) onDel(e.id); }}>🗑</button>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <button className="btn btn-g" style={{ width: '100%', borderStyle: 'dashed', marginTop: 4, padding: '14px' }} onClick={() => setShowPicker(true)}>+ Aggiungi Esercizio</button>
+          </div>
+          {showPicker && (
+            <div className="mb" onClick={() => setShowPicker(false)}>
+              <div className="modal" onClick={e => e.stopPropagation()}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <div className="m-title" style={{ marginBottom: 0 }}>Scegli Esercizio</div>
+                  <button className="btn btn-ic" onClick={() => setShowPicker(false)}>✕</button>
+                </div>
+                <input className="inp" placeholder="Cerca esercizio..." value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: 12 }} autoFocus />
+                <div className="preset-list">
+                  {filtered.map(p => (
+                    <div key={p.nome} className="pr-item" onClick={() => { onAdd(p); setShowPicker(false); setSearch(''); }}>
+                      <img className="pr-img" src={p.imgs[0]} onError={ev => { ev.target.src = PLACEHOLDER; }} alt="" />
+                      <span className="pr-n">{p.nome}</span>
+                      <span className="tag">{p.cat}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    function EsercizioModal({ esercizio, onSave, onDelete, onClose }) {
+      const [f, setF] = useState({ ...esercizio });
+      const [newUrl, setNewUrl] = useState('');
+      const s = (k, v) => setF(x => ({ ...x, [k]: v }));
+      const addImg = () => { if (newUrl.trim()) { s('imgs', [...(f.imgs || []), newUrl.trim()]); setNewUrl(''); } };
+      return (
+        <div className="mb" onClick={onClose}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div className="m-title" style={{ marginBottom: 0 }}>Modifica Esercizio</div>
+              <button className="btn btn-ic" onClick={onClose}>✕</button>
+            </div>
+            <div className="fg">
+              <label className="lbl">Nome</label>
+              <input className="inp" value={f.nome} onChange={e => s('nome', e.target.value)} />
+            </div>
+            <div className="fr3" style={{ marginBottom: 15 }}>
+              {[['Serie', 'serie', 'number', 1], ['Ripetizioni', 'ripetizioni', 'text', null], ['Peso (kg)', 'peso', 'number', 0]].map(([l, k, t, mn]) => (
+                <div key={k}>
+                  <label className="lbl">{l}</label>
+                  <input className="inp" type={t} value={f[k]} onChange={e => s(k, t === 'number' ? (parseFloat(e.target.value) || 0) : e.target.value)} min={mn} />
+                </div>
+              ))}
+            </div>
+            <div className="fr2">
+              <div>
+                <label className="lbl">Recupero (s)</label>
+                <input className="inp" type="number" value={f.recupero} onChange={e => s('recupero', parseInt(e.target.value) || 60)} />
+              </div>
+              <div>
+                <label className="lbl">Note</label>
+                <input className="inp" value={f.note} onChange={e => s('note', e.target.value)} />
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 25 }}>
+              <button className="btn btn-p" style={{ flex: 1 }} onClick={() => onSave(f)}>✓ Salva</button>
+              <button className="btn btn-red" onClick={onDelete}>🗑</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function WorkoutView({ giorno, exIdx, serieIdx, imgIdx, setImgIdx, nextEx, onDone, onSkipEx, onBack }) {
+      const ex = giorno.esercizi[exIdx];
+      const total = giorno.esercizi.length;
+      const progress = exIdx / total + (serieIdx / (ex.serie || 1)) / total;
+      const imgs = ex.imgs?.length ? ex.imgs : [];
+      const curImg = imgs.length ? imgs[imgIdx % imgs.length] : null;
+      return (
+        <div className="wk">
+          <div className="wk-prg"><div className="wk-prg-f" style={{ width: `${progress * 100}%` }} /></div>
+          <div className="wk-hdr">
+            <div className="wk-day">{giorno.nome}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span className="wk-cnt">Es. {exIdx + 1} / {total}</span>
+              <button className="btn btn-ic" onClick={onBack}>✕</button>
+            </div>
+          </div>
+          <div className="wk-body">
+            <div className="wk-ex-name">{ex.nome}</div>
+            <div className="wk-img-wrap">
+              <img className="wk-img" src={curImg || PLACEHOLDER} onError={ev => { ev.target.src = PLACEHOLDER; }} />
+              {imgs.length > 1 && (
+                <>
+                  <button className="cr-btn" style={{ left: 8 }} onClick={() => setImgIdx(i => (i - 1 + imgs.length) % imgs.length)}>‹</button>
+                  <button className="cr-btn" style={{ right: 8 }} onClick={() => setImgIdx(i => (i + 1) % imgs.length)}>›</button>
+                </>
+              )}
+            </div>
+            <div className="wk-stats">
+              <div className="st-box"><div className="st-v acc">{ex.ripetizioni}</div><div className="st-l">Rep</div></div>
+              <div className="st-box"><div className="st-v">{ex.peso > 0 ? ex.peso : '—'}</div><div className="st-l">kg</div></div>
+              <div className="st-box"><div className="st-v">{ex.recupero}s</div><div className="st-l">Rest</div></div>
+            </div>
+            <div className="wk-series" style={{ padding: '20px 20px 0' }}>
+              {Array.from({ length: ex.serie }, (_, i) => (
+                <div key={i} className={`sp ${i < serieIdx ? 'done' : i === serieIdx ? 'curr' : 'todo'}`}>
+                  {i < serieIdx ? '✓' : i + 1}
+                </div>
+              ))}
+            </div>
+            {nextEx && (
+              <div className="nxt-prev">
+                <img className="nxt-thumb" src={nextEx.imgs?.[0] || PLACEHOLDER} />
+                <div><div className="nxt-lbl">Prossimo</div><div className="nxt-n">{nextEx.nome}</div></div>
+              </div>
+            )}
+            <div className="wk-acts">
+              <button className="btn-done" onClick={onDone}>✓ Serie {serieIdx + 1} Completata</button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function RestOverlay({ time, nextSerie, nextEx, onSkip }) {
+      const m = Math.floor(time / 60), s = time % 60;
+      return (
+        <div className="rest-ov">
+          <div className="rest-lbl">⏱ Recupero</div>
+          <div className={`rest-t ${time <= 5 ? 'urg' : ''}`}>{m > 0 ? `${m}:${s.toString().padStart(2, '0')}` : s}</div>
+          <div className="rest-nxt">
+            {nextSerie ? <><div className="rest-nxt-lbl">Prossimo</div><div className="rest-nxt-n">{nextSerie.name} — {nextSerie.n}ª serie</div></> :
+              nextEx ? <><div className="rest-nxt-lbl">Prossimo</div><div className="rest-nxt-n">{nextEx.nome}</div></> : null}
+          </div>
+          <div style={{ marginTop: 40, width: '100%', maxWidth: 200 }}>
+            <button className="btn btn-g" style={{ width: '100%', padding: '15px' }} onClick={onSkip}>Salta</button>
+          </div>
+        </div>
+      );
+    }
+
+    function CompleteView({ giornoName, totalEx, onHome }) {
+      return (
+        <div className="done-pg">
+          <div className="done-ico">🏆</div>
+          <div className="done-t">COMPLETATO!</div>
+          <div className="done-s">Ottimo lavoro. Ogni ripetizione conta.</div>
+          <button className="btn btn-p" onClick={onHome}>← Home</button>
+        </div>
+      );
+    }
+
+    // --- FINE SORGENTE GYMTRACKER ---
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<GymTracker />);
+  </script>
+</body>
+
+</html>
