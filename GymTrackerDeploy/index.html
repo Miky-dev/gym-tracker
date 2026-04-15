@@ -25,8 +25,9 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 100vh;
+      height: 100dvh;
     }
+    #root { width: 100%; height: 100%; }
 
     #loader {
       display: flex;
@@ -156,7 +157,7 @@
 
     const mkEx = (p, o = {}) => ({
       id: uid(), nome: p.nome, imgs: [...p.imgs],
-      serie: 3, ripetizioni: "10", peso: 0, recupero: 90, note: "", ...o
+      serie: 3, ripetizioni: "10", peso: 0, recupero: 90, note: "", tipo: "standard", ...o
     });
 
     const buildDefault = () => ({
@@ -202,8 +203,8 @@
           --red:#FF4444; --red-d:rgba(255,68,68,.14);
           --r:12px; --rs:8px;
         }
-        body{background:var(--bg);color:var(--tx);font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased;}
-        .app{min-height:100vh;max-width:480px;margin:0 auto;position:relative;}
+        body{background:var(--bg);color:var(--tx);font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased;height:100dvh;min-height:100dvh;overflow:hidden;}
+        .app{height:100dvh;max-width:480px;margin:0 auto;position:relative;display:flex;flex-direction:column;overflow:hidden;}
         ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:var(--b);border-radius:2px}
         input,button{font-family:'Syne',sans-serif;}
         .btn{display:flex;align-items:center;justify-content:center;gap:7px;border:none;cursor:pointer;border-radius:var(--r);transition:all .13s;user-select:none;-webkit-tap-highlight-color:transparent;font-weight:600;}
@@ -216,11 +217,13 @@
         .btn-red:hover{border-color:var(--red);}
         .btn-ic{background:var(--s2);color:var(--tx-d);padding:8px;border-radius:var(--rs);width:36px;height:36px;font-size:15px;flex-shrink:0;}
         .btn-ic:hover{background:var(--s3);color:var(--tx);}
-        .inp{background:var(--s2);border:1px solid var(--b);color:var(--tx);border-radius:var(--rs);padding:12px 14px;font-size:14px;width:100%;outline:none;transition:border-color .13s;}
+        .inp{background:var(--s2);border:1px solid var(--b);color:var(--tx);border-radius:var(--rs);padding:12px 14px;font-size:16px;width:100%;outline:none;transition:border-color .13s;}
         .inp:focus{border-color:var(--acc);}
         .inp::placeholder{color:var(--tx-m);}
         .lbl{font-size:11px;font-weight:700;color:var(--tx-d);text-transform:uppercase;letter-spacing:.08em;display:block;margin-bottom:7px;}
         .tag{display:inline-flex;align-items:center;padding:3px 9px;border-radius:100px;font-size:11px;font-weight:700;letter-spacing:.04em;background:var(--acc-d2);color:var(--acc);border:1px solid rgba(200,255,0,.18);}
+        .tag-c{background:rgba(255,160,0,.15);color:#FFA000;border:1px solid rgba(255,160,0,.25);}
+        .tag-s{background:rgba(255,68,68,.15);color:#FF4444;border:1px solid rgba(255,68,68,.25);}
         .hdr{display:flex;align-items:center;justify-content:space-between;padding:18px 20px 15px;border-bottom:1px solid var(--b);position:sticky;top:0;background:var(--bg);z-index:10;}
         .hdr-title{font-size:12px;font-weight:700;color:var(--tx-m);letter-spacing:.09em;text-transform:uppercase;}
         .home{display:flex;flex-direction:column;min-height:100vh;padding:36px 26px;}
@@ -256,8 +259,8 @@
         .ex-s{font-size:12px;color:var(--tx-m);margin-top:2px;}
         .ex-acts{display:flex;gap:5px;}
         .mb{position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:100;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(5px);}
-        .modal{background:var(--s1);border-top-left-radius:22px;border-top-right-radius:22px;border:1px solid var(--b);border-bottom:none;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;padding:24px 20px 44px;animation:su .22s ease;}
-        @keyframes su{from{transform:translateY(28px);opacity:0}to{transform:translateY(0);opacity:1}}
+        .modal{background:var(--s1);border-top-left-radius:22px;border-top-right-radius:22px;border:1px solid var(--b);border-bottom:none;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;padding:24px 20px calc(44px + env(safe-area-inset-bottom));animation:su .22s ease;position:relative;}
+        @keyframes su{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
         .m-title{font-family:'Bebas Neue',sans-serif;font-size:29px;margin-bottom:22px;}
         .fg{margin-bottom:15px;}
         .fr2{display:grid;grid-template-columns:1fr 1fr;gap:11px;}
@@ -312,6 +315,7 @@
         .btn-done{background:var(--acc);color:#000;border:none;border-radius:var(--r);padding:19px;font-weight:900;font-size:16px;cursor:pointer;transition:all .13s;letter-spacing:.03em;display:flex;align-items:center;justify-content:center;gap:10px;-webkit-tap-highlight-color:transparent;width:100%;}
         .btn-done:active{transform:scale(.98);}
         .btn-done:hover{background:#d6ff1a;}
+        .wk-acts{padding:20px;display:flex;flex-direction:column;gap:10px;margin-top:auto;padding-bottom:calc(20px + env(safe-area-inset-bottom));}
         .btn-skip{background:var(--s1);border:1px solid var(--b);color:var(--tx-d);border-radius:var(--r);padding:14px;font-weight:600;font-size:14px;cursor:pointer;transition:all .13s;-webkit-tap-highlight-color:transparent;width:100%;}
         .btn-skip:hover{border-color:var(--tx-d);color:var(--tx);}
         .rest-ov{position:fixed;inset:0;background:var(--bg);z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px;animation:fi .2s ease;}
@@ -630,7 +634,11 @@
                 <div className="ex-row">
                   <img className="ex-thumb" src={e.imgs?.[0] || PLACEHOLDER} onError={ev => { ev.target.src = PLACEHOLDER; }} alt="" />
                   <div className="ex-info" onClick={() => onEdit(e.id)}>
-                    <div className="ex-n">{e.nome}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div className="ex-n">{e.nome}</div>
+                      {e.tipo === 'carico' && <span className="tag tag-c" style={{ fontSize: 9, padding: '1px 6px' }}>PESANTE</span>}
+                      {e.tipo === 'sfinimento' && <span className="tag tag-s" style={{ fontSize: 9, padding: '1px 6px' }}>SFINIMENTO</span>}
+                    </div>
                     <div className="ex-s">{e.serie}×{e.ripetizioni} rep · {e.peso > 0 ? `${e.peso} kg` : 'Peso corpo'} · {e.recupero}s rest</div>
                   </div>
                   <div className="ex-acts">
@@ -702,6 +710,27 @@
                 <input className="inp" value={f.note} onChange={e => s('note', e.target.value)} />
               </div>
             </div>
+            <div style={{ marginTop: 15 }}>
+              <label className="lbl">Tipo Allenamento</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8 }}>
+                {[
+                  ['Standard', 'standard', 'var(--s2)'],
+                  ['Pesi Alti', 'carico', '#FFA000'],
+                  ['Sfinimento', 'sfinimento', '#FF4444']
+                ].map(([l, v, c]) => (
+                  <button key={v} className="btn" 
+                    style={{ 
+                      fontSize: 12, padding: '10px 5px', 
+                      background: f.tipo === v ? (v === 'standard' ? 'var(--s3)' : `${c}22`) : 'var(--s2)',
+                      border: `1px solid ${f.tipo === v ? c : 'var(--b)'}`,
+                      color: f.tipo === v ? (v === 'standard' ? 'var(--tx)' : c) : 'var(--tx-m)'
+                    }}
+                    onClick={() => s('tipo', v)}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 25 }}>
               <button className="btn btn-p" style={{ flex: 1 }} onClick={() => onSave(f)}>✓ Salva</button>
               <button className="btn btn-red" onClick={onDelete}>🗑</button>
@@ -717,6 +746,17 @@
       const progress = exIdx / total + (serieIdx / (ex.serie || 1)) / total;
       const imgs = ex.imgs?.length ? ex.imgs : [];
       const curImg = imgs.length ? imgs[imgIdx % imgs.length] : null;
+
+      const ts = useRef(0);
+      const onTouchStart = (e) => { ts.current = e.touches[0].clientX; };
+      const onTouchEnd = (e) => {
+        const te = e.changedTouches[0].clientX;
+        const diff = ts.current - te;
+        if (Math.abs(diff) > 50) {
+          if (diff > 0) setImgIdx(i => (i + 1) % imgs.length);
+          else setImgIdx(i => (i - 1 + imgs.length) % imgs.length);
+        }
+      };
       return (
         <div className="wk">
           <div className="wk-prg"><div className="wk-prg-f" style={{ width: `${progress * 100}%` }} /></div>
@@ -728,9 +768,13 @@
             </div>
           </div>
           <div className="wk-body">
-            <div className="wk-ex-name">{ex.nome}</div>
-            <div className="wk-img-wrap">
-              <img className="wk-img" src={curImg || PLACEHOLDER} onError={ev => { ev.target.src = PLACEHOLDER; }} />
+            <div style={{ padding: '22px 20px 6px' }}>
+              <div className="wk-ex-name" style={{ padding: 0 }}>{ex.nome}</div>
+              {ex.tipo === 'carico' && <div className="tag tag-c" style={{ marginTop: 8 }}>🔥 FOCUS: CARICHI ALTI</div>}
+              {ex.tipo === 'sfinimento' && <div className="tag tag-s" style={{ marginTop: 8 }}>💀 FOCUS: A SFINIMENTO</div>}
+            </div>
+            <div className="wk-img-wrap" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd} style={{ touchAction: 'pan-y' }}>
+              <img className="wk-img" src={curImg || PLACEHOLDER} onError={ev => { ev.target.src = PLACEHOLDER; }} draggable="false" />
               {imgs.length > 1 && (
                 <>
                   <button className="cr-btn" style={{ left: 8 }} onClick={() => setImgIdx(i => (i - 1 + imgs.length) % imgs.length)}>‹</button>
