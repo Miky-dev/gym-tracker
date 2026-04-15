@@ -157,7 +157,7 @@
 
     const mkEx = (p, o = {}) => ({
       id: uid(), nome: p.nome, imgs: [...p.imgs],
-      serie: 3, ripetizioni: "10", peso: 0, recupero: 90, note: "", tipo: "standard", ...o
+      serie: 3, ripetizioni: "10", peso: 0, recupero: 90, note: "", tipo: "standard", superset: false, ...o
     });
 
     const buildDefault = () => ({
@@ -258,6 +258,8 @@
         .ex-n{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
         .ex-s{font-size:12px;color:var(--tx-m);margin-top:2px;}
         .ex-acts{display:flex;gap:5px;}
+        .ex-ss-badge{background:var(--acc);color:#000;font-size:9px;font-weight:900;padding:2px 5px;border-radius:4px;margin-left:6px;letter-spacing:.02em;}
+        .ex-ss-link{width:2px;background:var(--acc-d);height:10px;margin-left:42px;}
         .mb{position:fixed;inset:0;background:rgba(0,0,0,.86);z-index:100;display:flex;align-items:flex-end;justify-content:center;backdrop-filter:blur(5px);}
         .modal{background:var(--s1);border-top-left-radius:22px;border-top-right-radius:22px;border:1px solid var(--b);border-bottom:none;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;padding:24px 20px calc(44px + env(safe-area-inset-bottom));animation:su .22s ease;position:relative;}
         @keyframes su{from{transform:translateY(100%);opacity:0}to{transform:translateY(0);opacity:1}}
@@ -402,8 +404,27 @@
       const advRef = useRef(null);
       advRef.current = () => {
         if (!wGiorno) return;
-        const totalS = wGiorno.esercizi[exIdx]?.serie || 1;
-        if (serieIdx + 1 < totalS) {
+        const ex = wGiorno.esercizi[exIdx];
+        const prevEx = exIdx > 0 ? wGiorno.esercizi[exIdx - 1] : null;
+
+        if (prevEx && prevEx.superset) {
+          if (serieIdx + 1 < prevEx.serie) {
+            setExIdx(exIdx - 1);
+            setSerieIdx(s => s + 1);
+            setImgIdx(0);
+            return;
+          }
+          if (exIdx + 1 < wGiorno.esercizi.length) {
+            setExIdx(exIdx + 1);
+            setSerieIdx(0);
+            setImgIdx(0);
+          } else {
+            setView('complete');
+          }
+          return;
+        }
+
+        if (serieIdx + 1 < (ex?.serie || 1)) {
           setSerieIdx(s => s + 1);
           setImgIdx(0);
         } else if (exIdx + 1 < wGiorno.esercizi.length) {
@@ -445,6 +466,13 @@
       const completeSerie = () => {
         const ex = wGiorno?.esercizi[exIdx];
         if (!ex) return;
+        
+        if (ex.superset && exIdx + 1 < wGiorno.esercizi.length) {
+          setExIdx(exIdx + 1);
+          setImgIdx(0);
+          return;
+        }
+        
         const isLastS = serieIdx + 1 >= ex.serie;
         const isLastEx = exIdx + 1 >= wGiorno.esercizi.length;
         if (isLastS && isLastEx) { setView('complete'); return; }
@@ -630,25 +658,30 @@
             {giorno.esercizi.length === 0 ? (
               <div className="empty"><div className="empty-ic">🏋️</div><div className="empty-t">Nessun esercizio ancora.<br />Premi + per aggiungerne uno.</div></div>
             ) : giorno.esercizi.map((e, i) => (
-              <div key={e.id} className="ex-card">
-                <div className="ex-row">
-                  <img className="ex-thumb" src={e.imgs?.[0] || PLACEHOLDER} onError={ev => { ev.target.src = PLACEHOLDER; }} alt="" />
-                  <div className="ex-info" onClick={() => onEdit(e.id)}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <div className="ex-n">{e.nome}</div>
-                      {e.tipo === 'carico' && <span className="tag tag-c" style={{ fontSize: 9, padding: '1px 6px' }}>PESANTE</span>}
-                      {e.tipo === 'sfinimento' && <span className="tag tag-s" style={{ fontSize: 9, padding: '1px 6px' }}>SFINIMENTO</span>}
+              <React.Fragment key={e.id}>
+                <div className="ex-card" style={{ borderBottom: e.superset ? 'none' : '', borderBottomLeftRadius: e.superset ? 0 : '', borderBottomRightRadius: e.superset ? 0 : '' }}>
+                  <div className="ex-row">
+                    <img className="ex-thumb" src={e.imgs?.[0] || PLACEHOLDER} onError={ev => { ev.target.src = PLACEHOLDER; }} alt="" />
+                    <div className="ex-info" onClick={() => onEdit(e.id)}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div className="ex-n">{e.nome}</div>
+                        {e.superset && <span className="ex-ss-badge">SUPERSET</span>}
+                        {e.tipo === 'carico' && <span className="tag tag-c" style={{ fontSize: 9, padding: '1px 6px' }}>PESANTE</span>}
+                        {e.tipo === 'sfinimento' && <span className="tag tag-s" style={{ fontSize: 9, padding: '1px 6px' }}>SFINIMENTO</span>}
+                      </div>
+                      <div className="ex-s">{e.serie}×{e.ripetizioni} rep · {e.peso > 0 ? `${e.peso} kg` : 'Peso corpo'} · {e.recupero}s rest</div>
                     </div>
-                    <div className="ex-s">{e.serie}×{e.ripetizioni} rep · {e.peso > 0 ? `${e.peso} kg` : 'Peso corpo'} · {e.recupero}s rest</div>
-                  </div>
-                  <div className="ex-acts">
-                    <button className="btn btn-ic" style={{ fontSize: 12 }} onClick={() => onMove(e.id, 'up')} disabled={i === 0}>↑</button>
-                    <button className="btn btn-ic" style={{ fontSize: 12 }} onClick={() => onMove(e.id, 'down')} disabled={i === giorno.esercizi.length - 1}>↓</button>
-                    <button className="btn btn-ic" onClick={() => onEdit(e.id)}>✏️</button>
-                    <button className="btn btn-ic" style={{ color: 'var(--red)', background: 'var(--red-d)' }} onClick={() => { if (window.confirm('Eliminare?')) onDel(e.id); }}>🗑</button>
+                    <div className="ex-acts">
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <button className="btn btn-ic" style={{ fontSize: 10, height: 20, width: 28 }} onClick={() => onMove(e.id, 'up')} disabled={i === 0}>▲</button>
+                        <button className="btn btn-ic" style={{ fontSize: 10, height: 20, width: 28 }} onClick={() => onMove(e.id, 'down')} disabled={i === giorno.esercizi.length - 1}>▼</button>
+                      </div>
+                      <button className="btn btn-ic" onClick={() => onEdit(e.id)}>✏️</button>
+                    </div>
                   </div>
                 </div>
-              </div>
+                {e.superset && <div className="ex-ss-link"></div>}
+              </React.Fragment>
             ))}
             <button className="btn btn-g" style={{ width: '100%', borderStyle: 'dashed', marginTop: 4, padding: '14px' }} onClick={() => setShowPicker(true)}>+ Aggiungi Esercizio</button>
           </div>
@@ -731,6 +764,21 @@
                 ))}
               </div>
             </div>
+            <div style={{ marginTop: 15, display: 'flex', gap: 15, alignItems: 'center', background: 'var(--s2)', padding: '12px 15px', borderRadius: 'var(--rs)', border: '1px solid var(--b)' }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, fontWeight: 700 }}>In Superset</div>
+                <div style={{ fontSize: 11, color: 'var(--tx-m)' }}>Lega con l'esercizio successivo</div>
+              </div>
+              <div onClick={() => s('superset', !f.superset)} style={{ 
+                width: 44, height: 24, borderRadius: 20, background: f.superset ? 'var(--acc)' : 'var(--s3)', 
+                position: 'relative', cursor: 'pointer', transition: 'all .2s'
+              }}>
+                <div style={{ 
+                  position: 'absolute', top: 3, left: f.superset ? 23 : 3, width: 18, height: 18, 
+                  background: f.superset ? '#000' : 'var(--tx-m)', borderRadius: '50%', transition: 'all .2s' 
+                }} />
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 25 }}>
               <button className="btn btn-p" style={{ flex: 1 }} onClick={() => onSave(f)}>✓ Salva</button>
               <button className="btn btn-red" onClick={onDelete}>🗑</button>
@@ -769,7 +817,11 @@
           </div>
           <div className="wk-body">
             <div style={{ padding: '22px 20px 6px' }}>
-              <div className="wk-ex-name" style={{ padding: 0 }}>{ex.nome}</div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div className="wk-ex-name" style={{ padding: 0 }}>{ex.nome}</div>
+                {ex.superset && <span className="ex-ss-badge" style={{ fontSize: 11, padding: '4px 8px' }}>SUPERSET</span>}
+                {exIdx > 0 && giorno.esercizi[exIdx - 1].superset && <span className="ex-ss-badge" style={{ fontSize: 11, padding: '4px 8px' }}>SUPERSET</span>}
+              </div>
               {ex.tipo === 'carico' && <div className="tag tag-c" style={{ marginTop: 8 }}>🔥 FOCUS: CARICHI ALTI</div>}
               {ex.tipo === 'sfinimento' && <div className="tag tag-s" style={{ marginTop: 8 }}>💀 FOCUS: A SFINIMENTO</div>}
             </div>
