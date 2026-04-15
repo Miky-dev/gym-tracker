@@ -394,6 +394,7 @@
       const [restTime, setRestTime] = useState(0);
       const [imgIdx, setImgIdx] = useState(0);
       const timerRef = useRef(null);
+      const targetTimeRef = useRef(0);
       const advRef = useRef(null);
       advRef.current = () => {
         if (!wGiorno) return;
@@ -411,14 +412,24 @@
       };
       useEffect(() => {
         if (!isResting) return;
-        if (restTime > 0) {
-          timerRef.current = setTimeout(() => setRestTime(t => t - 1), 1000);
-        } else {
-          setIsResting(false);
-          advRef.current();
-        }
+        
+        const tick = () => {
+          const now = Date.now();
+          const remaining = Math.max(0, Math.ceil((targetTimeRef.current - now) / 1000));
+          
+          if (remaining > 0) {
+            setRestTime(remaining);
+            timerRef.current = setTimeout(tick, 500); 
+          } else {
+            setRestTime(0);
+            setIsResting(false);
+            advRef.current();
+          }
+        };
+
+        timerRef.current = setTimeout(tick, 100);
         return () => clearTimeout(timerRef.current);
-      }, [isResting, restTime]);
+      }, [isResting]);
       const wGiorno = scheda.giorni.find(g => g.id === wGiornoId);
       const currEx = wGiorno?.esercizi[exIdx];
       const nextEx = wGiorno?.esercizi[exIdx + 1];
@@ -433,7 +444,10 @@
         const isLastS = serieIdx + 1 >= ex.serie;
         const isLastEx = exIdx + 1 >= wGiorno.esercizi.length;
         if (isLastS && isLastEx) { setView('complete'); return; }
-        setRestTime(ex.recupero || 60);
+        
+        const t = ex.recupero || 60;
+        setRestTime(t);
+        targetTimeRef.current = Date.now() + t * 1000;
         setIsResting(true);
       };
       const skipRest = () => { clearTimeout(timerRef.current); setIsResting(false); advRef.current(); };
@@ -505,6 +519,7 @@
               <WorkoutView giorno={wGiorno} exIdx={exIdx} serieIdx={serieIdx}
                 imgIdx={imgIdx} setImgIdx={setImgIdx} nextEx={nextEx}
                 onDone={completeSerie}
+                onUpdEx={(eId, data) => updEsercizio(wGiorno.id, eId, data)}
                 onSkipEx={() => { if (exIdx + 1 < wGiorno.esercizi.length) { setExIdx(e => e + 1); setSerieIdx(0); setImgIdx(0); } else setView('complete'); }}
                 onBack={() => setView('home')} />
               {isResting && (
@@ -696,7 +711,7 @@
       );
     }
 
-    function WorkoutView({ giorno, exIdx, serieIdx, imgIdx, setImgIdx, nextEx, onDone, onSkipEx, onBack }) {
+    function WorkoutView({ giorno, exIdx, serieIdx, imgIdx, setImgIdx, nextEx, onDone, onUpdEx, onSkipEx, onBack }) {
       const ex = giorno.esercizi[exIdx];
       const total = giorno.esercizi.length;
       const progress = exIdx / total + (serieIdx / (ex.serie || 1)) / total;
@@ -724,9 +739,29 @@
               )}
             </div>
             <div className="wk-stats">
-              <div className="st-box"><div className="st-v acc">{ex.ripetizioni}</div><div className="st-l">Rep</div></div>
-              <div className="st-box"><div className="st-v">{ex.peso > 0 ? ex.peso : '—'}</div><div className="st-l">kg</div></div>
-              <div className="st-box"><div className="st-v">{ex.recupero}s</div><div className="st-l">Rest</div></div>
+              <div className="st-box">
+                <input className="st-v acc"
+                  style={{ background: 'transparent', border: 'none', color: 'inherit', font: 'inherit', width: '100%', textAlign: 'center', outline: 'none' }}
+                  value={ex.ripetizioni}
+                  onChange={e => onUpdEx(ex.id, { ripetizioni: e.target.value })} />
+                <div className="st-l">Rep</div>
+              </div>
+              <div className="st-box">
+                <input className="st-v"
+                  style={{ background: 'transparent', border: 'none', color: 'inherit', font: 'inherit', width: '100%', textAlign: 'center', outline: 'none' }}
+                  type="number"
+                  value={ex.peso}
+                  onChange={e => onUpdEx(ex.id, { peso: parseFloat(e.target.value) || 0 })} />
+                <div className="st-l">kg</div>
+              </div>
+              <div className="st-box">
+                <input className="st-v"
+                  style={{ background: 'transparent', border: 'none', color: 'inherit', font: 'inherit', width: '100%', textAlign: 'center', outline: 'none' }}
+                  type="number"
+                  value={ex.recupero}
+                  onChange={e => onUpdEx(ex.id, { recupero: parseInt(e.target.value) || 0 })} />
+                <div className="st-l">Rest</div>
+              </div>
             </div>
             <div className="wk-series" style={{ padding: '20px 20px 0' }}>
               {Array.from({ length: ex.serie }, (_, i) => (
