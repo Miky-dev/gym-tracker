@@ -162,6 +162,7 @@
 
     const buildDefault = () => ({
       id: "s1", nome: "La Mia Scheda",
+      history: [],
       giorni: [
         {
           id: uid(), nome: "Giorno A — Push", esercizi: [
@@ -201,6 +202,7 @@
           --b:#272727; --acc:#C8FF00; --acc-d:rgba(200,255,0,.13); --acc-d2:rgba(200,255,0,.07);
           --tx:#efefef; --tx-m:#686868; --tx-d:#9a9a9a;
           --red:#FF4444; --red-d:rgba(255,68,68,.14);
+          --blue:#4477FF; --blue-d:rgba(68,119,255,.14);
           --r:12px; --rs:8px;
         }
         body{background:var(--bg);color:var(--tx);font-family:'Syne',sans-serif;-webkit-font-smoothing:antialiased;height:100dvh;min-height:100dvh;overflow:hidden;}
@@ -337,12 +339,36 @@
         .empty{text-align:center;padding:48px 24px;color:var(--tx-m);}
         .empty-ic{font-size:44px;margin-bottom:14px;}
         .empty-t{font-size:14px;line-height:1.7;}
+        .stats-view{padding:20px;display:flex;flex-direction:column;gap:20px;padding-bottom:100px;}
+        .stat-card{background:var(--s1);border:1px solid var(--b);border-radius:var(--r);padding:20px;}
+        .stat-t{font-family:'Bebas Neue',sans-serif;font-size:24px;margin-bottom:15px;display:flex;align-items:center;gap:10px;}
+        .history-list{display:flex;flex-direction:column;gap:10px;}
+        .history-item{background:var(--s2);padding:15px;border-radius:var(--rs);border:1px solid var(--b);display:flex;justify-content:space-between;align-items:center;}
+        .hist-date{font-size:12px;color:var(--tx-m);font-weight:600;}
+        .hist-name{font-weight:700;font-size:14px;margin-top:2px;}
+        .ai-card{background:linear-gradient(135deg, var(--s1) 0%, #1a1b10 100%);border:1px solid var(--acc-d);box-shadow:0 10px 30px rgba(0,0,0,.3);}
+        .ai-text{font-size:14px;line-height:1.6;color:var(--tx-d);white-space:pre-wrap;}
+        .ai-loading{display:flex;align-items:center;gap:10px;color:var(--acc);font-weight:600;font-size:14px;}
+        .chart-container{height:150px;width:100%;margin-top:10px;position:relative;}
+        .chart-svg{width:100%;height:100%;overflow:visible;}
+        .chart-line{fill:none;stroke:var(--acc);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 5px var(--acc));}
+        .chart-point{fill:var(--acc);stroke:var(--bg);stroke-width:2;}
+        .chart-area{fill:url(#grad);}
         `;
 
     function GymTracker() {
       const [scheda, setScheda] = useState(buildDefault());
       const [view, setView] = useState('home');
       const [isLoading, setIsLoading] = useState(true);
+      const [groqKey, setGroqKey] = useState('');
+
+      // Caricamento Chiave API Groq da .env
+      useEffect(() => {
+        fetch('.env').then(r => r.text()).then(t => {
+          const match = t.match(/GROQ_API_KEY=(.*)/);
+          if (match && match[1]) setGroqKey(match[1].trim());
+        }).catch(e => console.error("Errore caricamento .env:", e));
+      }, []);
 
       // Caricamento dal Database (o LocalStorage come fallback)
       useEffect(() => {
@@ -354,10 +380,13 @@
             if (error && error.code !== 'PGRST116') throw error; // Ignora eccezione se non trova nessuna riga (0 rows)
 
             if (data && data.content) {
-              setScheda(data.content);
+              setScheda({ ...data.content, history: data.content.history || [] });
             } else {
               const s = localStorage.getItem('gym_v3');
-              if (s) setScheda(JSON.parse(s));
+              if (s) {
+                const parsed = JSON.parse(s);
+                setScheda({ ...parsed, history: parsed.history || [] });
+              }
             }
           } catch (e) {
             console.error("Avviso: Impossibile caricare da Supabase (fallito o non configurato) -> fallback su LocalStorage locale", e);
@@ -410,16 +439,8 @@
         if (prevEx && prevEx.superset) {
           if (serieIdx + 1 < prevEx.serie) {
             setExIdx(exIdx - 1);
-            setSerieIdx(s => s + 1);
-            setImgIdx(0);
-            return;
-          }
-          if (exIdx + 1 < wGiorno.esercizi.length) {
-            setExIdx(exIdx + 1);
-            setSerieIdx(0);
-            setImgIdx(0);
           } else {
-            setView('complete');
+            finishWorkout();
           }
           return;
         }
@@ -432,8 +453,19 @@
           setSerieIdx(0);
           setImgIdx(0);
         } else {
-          setView('complete');
+          finishWorkout();
         }
+      };
+      const finishWorkout = () => {
+        const timestamp = new Date().toISOString();
+        const workoutLog = {
+          id: uid(),
+          date: timestamp,
+          dayName: wGiorno.nome,
+          exercises: wGiorno.esercizi.map(e => ({ nome: e.nome, peso: e.peso, ripetizioni: e.ripetizioni, serie: e.serie }))
+        };
+        setScheda(s => ({ ...s, history: [workoutLog, ...(s.history || [])].slice(0, 50) })); // Keep last 50
+        setView('complete');
       };
       useEffect(() => {
         if (!isResting) return;
@@ -475,7 +507,7 @@
         
         const isLastS = serieIdx + 1 >= ex.serie;
         const isLastEx = exIdx + 1 >= wGiorno.esercizi.length;
-        if (isLastS && isLastEx) { setView('complete'); return; }
+        if (isLastS && isLastEx) { finishWorkout(); return; }
         
         const t = ex.recupero || 60;
         setRestTime(t);
@@ -504,6 +536,30 @@
           return { ...g, esercizi: a };
         })
       }));
+      const fetchGroqAdvice = async (history) => {
+        if (!groqKey) return "Errore: Chiave API Groq non trovata nel file .env";
+        try {
+          const prompt = `Sei un esperto personal trainer. Analizza la cronologia degli allenamenti e dai consigli brevi (max 3-4 punti) e motivazionali su come migliorare o cosa cambiare. Mantieni un tono professionale e "hardcore" ma incoraggiante. Rispondi in italiano.
+          
+          Dati allenamenti (ultimi):
+          ${JSON.stringify(history.slice(0, 5), null, 2)}`;
+
+          const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: "llama3-8b-8192",
+              messages: [{ role: "user", content: prompt }],
+              temperature: 0.7
+            })
+          });
+          const data = await res.json();
+          return data.choices?.[0]?.message?.content || "Nessun consiglio disponibile al momento.";
+        } catch (e) {
+          console.error(e);
+          return "Errore durante la connessione a Groq.";
+        }
+      };
       const editEx = editModal ? scheda.giorni.find(g => g.id === editModal.gId)?.esercizi.find(e => e.id === editModal.eId) : null;
       return (
         <div className="app">
@@ -511,7 +567,11 @@
           {view === 'home' && (
             <HomeView schedaNome={scheda.nome} hasGiorni={scheda.giorni.length > 0}
               onScheda={() => setView('scheda')}
+              onStats={() => setView('stats')}
               onStart={() => { if (scheda.giorni.length === 1) startWorkout(scheda.giorni[0].id); else setView('daySelect'); }} />
+          )}
+          {view === 'stats' && (
+            <StatsView history={scheda.history} onBack={() => setView('home')} onGetAdvice={fetchGroqAdvice} />
           )}
           {view === 'scheda' && (
             <SchedaView scheda={scheda} onBack={() => setView('home')}
@@ -576,7 +636,7 @@
       );
     }
 
-    function HomeView({ schedaNome, hasGiorni, onScheda, onStart }) {
+    function HomeView({ schedaNome, hasGiorni, onScheda, onStats, onStart }) {
       return (
         <div className="home">
           <div className="home-logo">
@@ -593,6 +653,10 @@
             )}
             <button className="home-btn sec" onClick={onScheda}>
               <span>📋 {schedaNome || 'La Mia Scheda'}</span>
+              <span style={{ fontSize: 20 }}>→</span>
+            </button>
+            <button className="home-btn sec" onClick={() => onStats()}>
+              <span>📊 Statistiche & AI</span>
               <span style={{ fontSize: 20 }}>→</span>
             </button>
           </div>
@@ -892,6 +956,96 @@
           </div>
           <div style={{ marginTop: 40, width: '100%', maxWidth: 200 }}>
             <button className="btn btn-g" style={{ width: '100%', padding: '15px' }} onClick={onSkip}>Salta</button>
+          </div>
+        </div>
+      );
+    }
+
+    function StatsView({ history, onBack, onGetAdvice }) {
+      const [advice, setAdvice] = useState('');
+      const [loadingAdvice, setLoadingAdvice] = useState(false);
+
+      const getAiAdvice = async () => {
+        setLoadingAdvice(true);
+        const res = await onGetAdvice(history);
+        setAdvice(res);
+        setLoadingAdvice(false);
+      };
+
+      // Volume totale per sessione per il grafico
+      const chartData = [...history].reverse().map(h => {
+        const vol = (h.exercises || []).reduce((acc, e) => acc + (parseFloat(e.peso) || 0) * (parseInt(e.ripetizioni) || 0) * (parseInt(e.serie) || 0), 0);
+        return { date: new Date(h.date).toLocaleDateString(), vol };
+      });
+
+      const maxVol = Math.max(...chartData.map(d => d.vol), 1);
+      const points = chartData.map((d, i) => {
+        const x = (i / (Math.max(chartData.length - 1, 1))) * 100;
+        const y = 100 - (d.vol / maxVol) * 80 - 10;
+        return `${x},${y}`;
+      }).join(' ');
+
+      return (
+        <div className="page" style={{ overflowY: 'auto' }}>
+          <div className="hdr">
+            <button className="btn btn-ic" onClick={onBack} style={{ background: 'transparent' }}>←</button>
+            <span className="hdr-title">Statistiche</span>
+            <div style={{ width: 36 }}></div>
+          </div>
+          
+          <div className="stats-view">
+            <div className="stat-card ai-card">
+              <div className="stat-t"><span>🤖</span> AI Coach</div>
+              {advice ? (
+                <div className="ai-text">{advice}</div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div className="ai-text">Analizza i tuoi ultimi allenamenti con Llama 3 per ricevere consigli mirati.</div>
+                  <button className="btn btn-p" onClick={getAiAdvice} disabled={loadingAdvice || history.length === 0} style={{ padding: '12px' }}>
+                    {loadingAdvice ? "Analisi..." : "Genera Consigli"}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-t">📈 Grafico Volume</div>
+              <div className="chart-container">
+                {chartData.length > 1 ? (
+                  <svg className="chart-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                    <defs>
+                      <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="var(--acc)" stopOpacity="0.3" />
+                        <stop offset="100%" stopColor="var(--acc)" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+                    <polyline points={`0,100 ${points} 100,100`} className="chart-area" />
+                    <polyline points={points} className="chart-line" />
+                    {chartData.map((d, i) => (
+                      <circle key={i} cx={(i / (chartData.length - 1)) * 100} cy={100 - (d.vol / maxVol) * 80 - 10} r="2" className="chart-point" />
+                    ))}
+                  </svg>
+                ) : <div className="empty">Dati insufficienti</div>}
+              </div>
+            </div>
+
+            <div className="stat-card">
+              <div className="stat-t">🕒 Cronologia</div>
+              <div className="history-list">
+                {history.length === 0 ? <div className="empty">Nessun log.</div> : history.map(h => (
+                  <div key={h.id} className="history-item">
+                    <div>
+                      <div className="hist-date">{new Date(h.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</div>
+                      <div className="hist-name">{h.dayName}</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ color: 'var(--acc)', fontWeight: 800 }}>{h.exercises.length} Es.</div>
+                      <div style={{ fontSize: 10, color: 'var(--tx-m)' }}>{h.exercises.reduce((acc, e) => acc + (parseInt(e.serie) || 0), 0)} serie</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       );
