@@ -625,11 +625,23 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
           });
+
+          // Leggi prima il testo grezzo (evita crash se la risposta non è JSON)
+          const rawText = await res.text();
+
           if (!res.ok) {
-            const err = await res.json();
-            return `Errore: ${err.error || 'Risposta non valida dal server.'}`;
+            if (res.status === 404) {
+              return "⚠️ Funzione AI non disponibile in locale.\n\nL'AI funziona solo su Vercel. Fai il deploy e torna qui!";
+            }
+            try {
+              const err = JSON.parse(rawText);
+              return `Errore: ${err.error || 'Risposta non valida dal server.'}`;
+            } catch {
+              return `Errore ${res.status}: ${rawText.slice(0, 100)}`;
+            }
           }
-          const data = await res.json();
+
+          const data = JSON.parse(rawText);
           return data.advice || "Nessun consiglio disponibile al momento.";
         } catch (e) {
           console.error(e);
