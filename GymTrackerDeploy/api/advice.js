@@ -74,7 +74,7 @@ ${JSON.stringify((history || []).slice(0, 10).map(h => ({ data: new Date(h.date)
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'llama3-8b-8192',
+        model: 'gpt-oss-20B',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.72,
         max_tokens: 600,
