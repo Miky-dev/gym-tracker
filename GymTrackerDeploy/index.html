@@ -354,21 +354,50 @@
         .chart-line{fill:none;stroke:var(--acc);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;filter:drop-shadow(0 0 5px var(--acc));}
         .chart-point{fill:var(--acc);stroke:var(--bg);stroke-width:2;}
         .chart-area{fill:url(#grad);}
+        .ai-actions{display:flex;flex-direction:column;gap:9px;}
+        .ai-btn{border:none;border-radius:var(--rs);padding:13px 16px;font-family:'Syne',sans-serif;font-weight:700;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:9px;transition:all .13s;-webkit-tap-highlight-color:transparent;text-align:left;}
+        .ai-btn:active{transform:scale(.98);}
+        .ai-btn-primary{background:var(--acc);color:#000;}
+        .ai-btn-primary:hover{background:#d6ff1a;}
+        .ai-btn-modified{background:rgba(200,255,0,.18);color:var(--acc);border:1px solid rgba(200,255,0,.4);}
+        .ai-btn-modified:hover{background:rgba(200,255,0,.28);}
+        .ai-btn-secondary{background:var(--s2);color:var(--tx-d);border:1px solid var(--b);}
+        .ai-btn-secondary:hover{border-color:var(--tx-d);color:var(--tx);}
+        .ai-result-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+        .ai-result-type{font-size:10px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:var(--acc);}
+        .ai-result-clear{background:transparent;border:none;color:var(--tx-m);font-size:18px;cursor:pointer;line-height:1;padding:0;}
+        .hist-badge{font-size:9px;font-weight:800;padding:2px 6px;border-radius:4px;background:rgba(200,255,0,.15);color:var(--acc);border:1px solid rgba(200,255,0,.25);letter-spacing:.04em;}
+        .resume-overlay{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;backdrop-filter:blur(8px);animation:fi .2s ease;}
+        .resume-card{background:var(--s1);border:1px solid rgba(200,255,0,.3);border-radius:22px;padding:32px 24px;width:100%;max-width:380px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+        .resume-icon{font-size:56px;margin-bottom:16px;}
+        .resume-title{font-family:'Bebas Neue',sans-serif;font-size:36px;color:var(--acc);margin-bottom:8px;}
+        .resume-sub{font-size:14px;color:var(--tx-d);line-height:1.6;margin-bottom:28px;}
+        .resume-btns{display:flex;flex-direction:column;gap:10px;}
+        .done-ai-btn{background:rgba(200,255,0,.12);border:1px solid rgba(200,255,0,.35);color:var(--acc);border-radius:var(--r);padding:15px;font-family:'Syne',sans-serif;font-weight:800;font-size:14px;cursor:pointer;transition:all .13s;display:flex;align-items:center;justify-content:center;gap:9px;-webkit-tap-highlight-color:transparent;}
+        .done-ai-btn:hover{background:rgba(200,255,0,.22);}
+        .done-ai-btn:active{transform:scale(.98);}
+        .done-ai-btn.modified{background:rgba(200,255,0,.2);border-color:var(--acc);}
+        .done-ai-result{margin-top:16px;background:var(--s2);border:1px solid var(--b);border-radius:var(--rs);padding:16px;text-align:left;font-size:13px;line-height:1.65;color:var(--tx-d);white-space:pre-wrap;}
         `;
+
+    const ACTIVE_SESSION_KEY = 'gym_active_session';
 
     function GymTracker() {
       const [scheda, setScheda] = useState(buildDefault());
       const [view, setView] = useState('home');
       const [isLoading, setIsLoading] = useState(true);
+      const [resumeSession, setResumeSession] = useState(null); // { giornoId, exIdx, serieIdx, startSnapshot }
+      const startSnapshotRef = useRef(null); // snapshot degli esercizi all'inizio del workout
+      const [lastSessionResult, setLastSessionResult] = useState(null); // { log, changes } dell'ultima sessione
 
-      // Caricamento dal Database (o LocalStorage come fallback)
+      // Caricamento dal Database (o LocalStorage come fallback) + controllo sessione attiva
       useEffect(() => {
         const loadData = async () => {
           try {
             if (SUPABASE_URL.includes("INSERISCI_QUI")) throw new Error("Supabase non ancora configurato.");
             const { data, error } = await supabase.from('gym_data').select('content').eq('id', 1).single();
 
-            if (error && error.code !== 'PGRST116') throw error; // Ignora eccezione se non trova nessuna riga (0 rows)
+            if (error && error.code !== 'PGRST116') throw error;
 
             if (data && data.content) {
               setScheda({ ...data.content, history: data.content.history || [] });
@@ -388,6 +417,11 @@
           }
         };
         loadData();
+        // Controlla se c'è una sessione attiva interrotta
+        const savedSession = localStorage.getItem(ACTIVE_SESSION_KEY);
+        if (savedSession) {
+          try { setResumeSession(JSON.parse(savedSession)); } catch {}
+        }
       }, []);
 
       // Salvataggio nel Database Supabase + LocalStorage
@@ -422,6 +456,18 @@
       const timerRef = useRef(null);
       const targetTimeRef = useRef(0);
       const advRef = useRef(null);
+
+      // Persiste lo stato della sessione attiva nel localStorage ad ogni cambio
+      useEffect(() => {
+        if (!wGiornoId) return;
+        const sessionState = {
+          giornoId: wGiornoId,
+          exIdx,
+          serieIdx,
+          startSnapshot: startSnapshotRef.current,
+        };
+        localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(sessionState));
+      }, [wGiornoId, exIdx, serieIdx]);
       advRef.current = () => {
         if (!wGiorno) return;
         const ex = wGiorno.esercizi[exIdx];
@@ -449,13 +495,33 @@
       };
       const finishWorkout = () => {
         const timestamp = new Date().toISOString();
+        const finalExercises = wGiorno.esercizi.map(e => ({ nome: e.nome, peso: e.peso, ripetizioni: e.ripetizioni, serie: e.serie }));
+        
+        // Rileva modifiche rispetto allo snapshot iniziale
+        const snapshot = startSnapshotRef.current || [];
+        const changes = [];
+        finalExercises.forEach(finalEx => {
+          const snapEx = snapshot.find(s => s.nome === finalEx.nome);
+          if (!snapEx) return;
+          const diffs = {};
+          if (String(snapEx.peso) !== String(finalEx.peso)) diffs.peso = { before: snapEx.peso, after: finalEx.peso };
+          if (String(snapEx.ripetizioni) !== String(finalEx.ripetizioni)) diffs.ripetizioni = { before: snapEx.ripetizioni, after: finalEx.ripetizioni };
+          if (String(snapEx.serie) !== String(finalEx.serie)) diffs.serie = { before: snapEx.serie, after: finalEx.serie };
+          if (Object.keys(diffs).length > 0) changes.push({ nome: finalEx.nome, changes: diffs });
+        });
+
         const workoutLog = {
           id: uid(),
           date: timestamp,
           dayName: wGiorno.nome,
-          exercises: wGiorno.esercizi.map(e => ({ nome: e.nome, peso: e.peso, ripetizioni: e.ripetizioni, serie: e.serie }))
+          exercises: finalExercises,
+          hadModifications: changes.length > 0,
+          changes,
         };
-        setScheda(s => ({ ...s, history: [workoutLog, ...(s.history || [])].slice(0, 50) })); // Keep last 50
+        setLastSessionResult({ log: workoutLog, changes });
+        setScheda(s => ({ ...s, history: [workoutLog, ...(s.history || [])].slice(0, 50) }));
+        localStorage.removeItem(ACTIVE_SESSION_KEY); // Sessione completata: rimuovi
+        startSnapshotRef.current = null;
         setView('complete');
       };
       useEffect(() => {
@@ -482,9 +548,23 @@
       const currEx = wGiorno?.esercizi[exIdx];
       const nextEx = wGiorno?.esercizi[exIdx + 1];
       const selGiorno = scheda.giorni.find(g => g.id === selGiornoId);
-      const startWorkout = (giornoId) => {
-        setWGiornoId(giornoId); setExIdx(0); setSerieIdx(0);
+      const startWorkout = (giornoId, resumeExIdx = 0, resumeSerieIdx = 0) => {
+        const giorno = scheda.giorni.find(g => g.id === giornoId);
+        // Salva snapshot degli esercizi attuali
+        if (giorno && resumeExIdx === 0 && resumeSerieIdx === 0) {
+          startSnapshotRef.current = giorno.esercizi.map(e => ({ nome: e.nome, peso: e.peso, ripetizioni: e.ripetizioni, serie: e.serie }));
+        }
+        setWGiornoId(giornoId);
+        setExIdx(resumeExIdx);
+        setSerieIdx(resumeSerieIdx);
         setIsResting(false); setImgIdx(0); setView('workout');
+        setResumeSession(null);
+      };
+
+      const abandonSession = () => {
+        localStorage.removeItem(ACTIVE_SESSION_KEY);
+        startSnapshotRef.current = null;
+        setResumeSession(null);
       };
       const completeSerie = () => {
         const ex = wGiorno?.esercizi[exIdx];
@@ -527,12 +607,12 @@
           return { ...g, esercizi: a };
         })
       }));
-      const fetchGroqAdvice = async (history) => {
+      const fetchGroqAdvice = async (payload) => {
         try {
           const res = await fetch('/api/advice', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ history })
+            body: JSON.stringify(payload)
           });
           if (!res.ok) {
             const err = await res.json();
@@ -549,6 +629,18 @@
       return (
         <div className="app">
           <style>{CSS}</style>
+          {resumeSession && scheda.giorni.find(g => g.id === resumeSession.giornoId) && (
+            <ResumeSessionModal
+              giorno={scheda.giorni.find(g => g.id === resumeSession.giornoId)}
+              exIdx={resumeSession.exIdx}
+              serieIdx={resumeSession.serieIdx}
+              onResume={() => {
+                startSnapshotRef.current = resumeSession.startSnapshot || null;
+                startWorkout(resumeSession.giornoId, resumeSession.exIdx, resumeSession.serieIdx);
+              }}
+              onAbandon={abandonSession}
+            />
+          )}
           {view === 'home' && (
             <HomeView schedaNome={scheda.nome} hasGiorni={scheda.giorni.length > 0}
               onScheda={() => setView('scheda')}
@@ -556,7 +648,7 @@
               onStart={() => { if (scheda.giorni.length === 1) startWorkout(scheda.giorni[0].id); else setView('daySelect'); }} />
           )}
           {view === 'stats' && (
-            <StatsView history={scheda.history} onBack={() => setView('home')} onGetAdvice={fetchGroqAdvice} />
+            <StatsView history={scheda.history} scheda={scheda} onBack={() => setView('home')} onGetAdvice={fetchGroqAdvice} />
           )}
           {view === 'scheda' && (
             <SchedaView scheda={scheda} onBack={() => setView('home')}
@@ -608,8 +700,13 @@
             </>
           )}
           {view === 'complete' && (
-            <CompleteView giornoName={wGiorno?.nome} totalEx={wGiorno?.esercizi.length}
-              onHome={() => setView('home')} />
+            <CompleteView
+              giornoName={wGiorno?.nome}
+              totalEx={wGiorno?.esercizi.length}
+              sessionResult={lastSessionResult}
+              onGetAdvice={fetchGroqAdvice}
+              onHome={() => { setLastSessionResult(null); setView('home'); }}
+            />
           )}
           {editModal && editEx && (
             <EsercizioModal esercizio={editEx}
@@ -946,15 +1043,26 @@
       );
     }
 
-    function StatsView({ history, onBack, onGetAdvice }) {
+    function StatsView({ history, scheda, onBack, onGetAdvice }) {
       const [advice, setAdvice] = useState('');
+      const [adviceType, setAdviceType] = useState('');
       const [loadingAdvice, setLoadingAdvice] = useState(false);
 
-      const getAiAdvice = async () => {
+      const callAI = async (type) => {
         setLoadingAdvice(true);
-        const res = await onGetAdvice(history);
+        setAdvice('');
+        setAdviceType(type);
+        let payload = { analysisType: type, history };
+        if (type === 'plan_review') payload.currentPlan = scheda;
+        const res = await onGetAdvice(payload);
         setAdvice(res);
         setLoadingAdvice(false);
+      };
+
+      const typeLabels = {
+        post_workout: '🏋️ ANALISI ALLENAMENTO',
+        rest_day: '😴 GIORNO DI RIPOSO',
+        plan_review: '📋 REVISIONE PIANO',
       };
 
       // Volume totale per sessione per il grafico
@@ -982,13 +1090,30 @@
             <div className="stat-card ai-card">
               <div className="stat-t"><span>🤖</span> AI Coach</div>
               {advice ? (
-                <div className="ai-text">{advice}</div>
+                <div>
+                  <div className="ai-result-header">
+                    <span className="ai-result-type">{typeLabels[adviceType] || 'ANALISI'}</span>
+                    <button className="ai-result-clear" onClick={() => setAdvice('')}>✕</button>
+                  </div>
+                  <div className="ai-text">{loadingAdvice ? '⏳ Analisi in corso...' : advice}</div>
+                  {!loadingAdvice && (
+                    <div style={{ marginTop: 14 }}>
+                      <button className="ai-btn ai-btn-secondary" style={{ width: '100%', justifyContent: 'center' }} onClick={() => setAdvice('')}>← Torna alle opzioni</button>
+                    </div>
+                  )}
+                </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div className="ai-text">Analizza i tuoi ultimi allenamenti con Llama 3 per ricevere consigli mirati.</div>
-                  <button className="btn btn-p" onClick={getAiAdvice} disabled={loadingAdvice || history.length === 0} style={{ padding: '12px' }}>
-                    {loadingAdvice ? "Analisi..." : "Genera Consigli"}
+                <div className="ai-actions">
+                  <button className="ai-btn ai-btn-primary" onClick={() => callAI('post_workout')} disabled={loadingAdvice || history.length === 0}>
+                    🏋️ Analizza Ultimo Allenamento
                   </button>
+                  <button className="ai-btn ai-btn-secondary" onClick={() => callAI('rest_day')} disabled={loadingAdvice}>
+                    😴 Consigli Giorno di Riposo
+                  </button>
+                  <button className="ai-btn ai-btn-secondary" onClick={() => callAI('plan_review')} disabled={loadingAdvice || history.length === 0}>
+                    📋 Ottimizza il Mio Piano
+                  </button>
+                  {loadingAdvice && <div className="ai-loading"><div className="spinner" style={{ width: 18, height: 18, borderWidth: 2 }}></div> Analisi con Llama 3...</div>}
                 </div>
               )}
             </div>
@@ -1021,7 +1146,10 @@
                   <div key={h.id} className="history-item">
                     <div>
                       <div className="hist-date">{new Date(h.date).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}</div>
-                      <div className="hist-name">{h.dayName}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <div className="hist-name">{h.dayName}</div>
+                        {h.hadModifications && <span className="hist-badge">✏️ MODIFICATO</span>}
+                      </div>
                     </div>
                     <div style={{ textAlign: 'right' }}>
                       <div style={{ color: 'var(--acc)', fontWeight: 800 }}>{h.exercises.length} Es.</div>
@@ -1036,13 +1164,58 @@
       );
     }
 
-    function CompleteView({ giornoName, totalEx, onHome }) {
+    function CompleteView({ giornoName, totalEx, sessionResult, onGetAdvice, onHome }) {
+      const [aiResult, setAiResult] = useState('');
+      const [loading, setLoading] = useState(false);
+      const hadMods = sessionResult?.changes?.length > 0;
+
+      const analyzeSession = async () => {
+        setLoading(true);
+        const type = hadMods ? 'modified_workout' : 'post_workout';
+        const payload = {
+          analysisType: type,
+          history: sessionResult?.log ? [sessionResult.log] : [],
+          sessionChanges: sessionResult?.changes || [],
+        };
+        const res = await onGetAdvice(payload);
+        setAiResult(res);
+        setLoading(false);
+      };
+
       return (
         <div className="done-pg">
           <div className="done-ico">🏆</div>
           <div className="done-t">COMPLETATO!</div>
           <div className="done-s">Ottimo lavoro. Ogni ripetizione conta.</div>
-          <button className="btn btn-p" onClick={onHome}>← Home</button>
+          {!aiResult ? (
+            <button className={`done-ai-btn ${hadMods ? 'modified' : ''}`} onClick={analyzeSession} disabled={loading} style={{ marginBottom: 16 }}>
+              {loading ? '⏳ Analisi...' : hadMods ? '🔥 Hai modificato degli esercizi — Analizza!' : '🤖 Analizza Sessione con AI'}
+            </button>
+          ) : (
+            <div className="done-ai-result">{aiResult}</div>
+          )}
+          <button className="btn btn-p" onClick={onHome} style={{ marginTop: 12 }}>← Home</button>
+        </div>
+      );
+    }
+
+    function ResumeSessionModal({ giorno, exIdx, serieIdx, onResume, onAbandon }) {
+      const ex = giorno?.esercizi?.[exIdx];
+      return (
+        <div className="resume-overlay">
+          <div className="resume-card">
+            <div className="resume-icon">⚡</div>
+            <div className="resume-title">Sessione in Corso!</div>
+            <div className="resume-sub">
+              Hai un allenamento interrotto.<br />
+              <strong style={{ color: 'var(--tx)' }}>{giorno?.nome}</strong><br />
+              {ex ? <>Eri all'esercizio <strong style={{ color: 'var(--acc)' }}>{ex.nome}</strong> (serie {serieIdx + 1})</> : 'Riprendi da dove eri rimasto.'}
+            </div>
+            <div className="resume-btns">
+              <button className="btn btn-p" style={{ width: '100%', padding: '16px' }} onClick={onResume}>▶ Riprendi Sessione</button>
+              <button className="btn btn-g" style={{ width: '100%' }} onClick={onAbandon}>✕ Abbandona e Ricomincia</button>
+            </div>
+          </div>
         </div>
       );
     }
