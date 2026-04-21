@@ -360,15 +360,6 @@
       const [scheda, setScheda] = useState(buildDefault());
       const [view, setView] = useState('home');
       const [isLoading, setIsLoading] = useState(true);
-      const [groqKey, setGroqKey] = useState('');
-
-      // Caricamento Chiave API Groq da .env
-      useEffect(() => {
-        fetch('.env').then(r => r.text()).then(t => {
-          const match = t.match(/GROQ_API_KEY=(.*)/);
-          if (match && match[1]) setGroqKey(match[1].trim());
-        }).catch(e => console.error("Errore caricamento .env:", e));
-      }, []);
 
       // Caricamento dal Database (o LocalStorage come fallback)
       useEffect(() => {
@@ -537,27 +528,21 @@
         })
       }));
       const fetchGroqAdvice = async (history) => {
-        if (!groqKey) return "Errore: Chiave API Groq non trovata nel file .env";
         try {
-          const prompt = `Sei un esperto personal trainer. Analizza la cronologia degli allenamenti e dai consigli brevi (max 3-4 punti) e motivazionali su come migliorare o cosa cambiare. Mantieni un tono professionale e "hardcore" ma incoraggiante. Rispondi in italiano.
-          
-          Dati allenamenti (ultimi):
-          ${JSON.stringify(history.slice(0, 5), null, 2)}`;
-
-          const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          const res = await fetch('/api/advice', {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${groqKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: "llama3-8b-8192",
-              messages: [{ role: "user", content: prompt }],
-              temperature: 0.7
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ history })
           });
+          if (!res.ok) {
+            const err = await res.json();
+            return `Errore: ${err.error || 'Risposta non valida dal server.'}`;
+          }
           const data = await res.json();
-          return data.choices?.[0]?.message?.content || "Nessun consiglio disponibile al momento.";
+          return data.advice || "Nessun consiglio disponibile al momento.";
         } catch (e) {
           console.error(e);
-          return "Errore durante la connessione a Groq.";
+          return "Errore durante la connessione al server.";
         }
       };
       const editEx = editModal ? scheda.giorni.find(g => g.id === editModal.gId)?.esercizi.find(e => e.id === editModal.eId) : null;
