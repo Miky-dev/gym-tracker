@@ -468,29 +468,17 @@
         };
         localStorage.setItem(ACTIVE_SESSION_KEY, JSON.stringify(sessionState));
       }, [wGiornoId, exIdx, serieIdx]);
-      advRef.current = () => {
-        if (!wGiorno) return;
-        const ex = wGiorno.esercizi[exIdx];
-        const prevEx = exIdx > 0 ? wGiorno.esercizi[exIdx - 1] : null;
-
-        if (prevEx && prevEx.superset) {
-          if (serieIdx + 1 < prevEx.serie) {
-            setExIdx(exIdx - 1);
-          } else {
-            finishWorkout();
-          }
-          return;
-        }
-
-        if (serieIdx + 1 < (ex?.serie || 1)) {
-          setSerieIdx(s => s + 1);
+      // afterRestRef contiene l'azione da eseguire al termine del recupero
+      const afterRestRef = useRef(null);
+      const doAfterRest = () => {
+        const action = afterRestRef.current;
+        if (!action) return;
+        afterRestRef.current = null;
+        if (action.type === 'finish') { finishWorkout(); return; }
+        if (action.type === 'next') {
+          setExIdx(action.exIdx);
+          setSerieIdx(action.serieIdx);
           setImgIdx(0);
-        } else if (exIdx + 1 < wGiorno.esercizi.length) {
-          setExIdx(e => e + 1);
-          setSerieIdx(0);
-          setImgIdx(0);
-        } else {
-          finishWorkout();
         }
       };
       const finishWorkout = () => {
@@ -544,6 +532,7 @@
         timerRef.current = setTimeout(tick, 100);
         return () => clearTimeout(timerRef.current);
       }, [isResting]);
+      advRef.current = doAfterRest;
       const wGiorno = scheda.giorni.find(g => g.id === wGiornoId);
       const currEx = wGiorno?.esercizi[exIdx];
       const nextEx = wGiorno?.esercizi[exIdx + 1];
@@ -567,19 +556,41 @@
         setResumeSession(null);
       };
       const completeSerie = () => {
-        const ex = wGiorno?.esercizi[exIdx];
+        const esercizi = wGiorno?.esercizi;
+        if (!esercizi) return;
+        const ex = esercizi[exIdx];
         if (!ex) return;
-        
-        if (ex.superset && exIdx + 1 < wGiorno.esercizi.length) {
+
+        // --- Logica Superset ---
+        // Esercizio A (superset=true): passa immediatamente a B, nessun recupero, serieIdx invariato
+        if (ex.superset && exIdx + 1 < esercizi.length) {
           setExIdx(exIdx + 1);
           setImgIdx(0);
           return;
         }
-        
-        const isLastS = serieIdx + 1 >= ex.serie;
-        const isLastEx = exIdx + 1 >= wGiorno.esercizi.length;
-        if (isLastS && isLastEx) { finishWorkout(); return; }
-        
+
+        // Siamo su B (o su un esercizio normale).
+        // Il contatore di serie è quello di B; il gruppo (A+B) usa le serie di A.
+        const isPairSecond = exIdx > 0 && esercizi[exIdx - 1]?.superset;
+        const groupSeries = isPairSecond ? (esercizi[exIdx - 1].serie || 1) : (ex.serie || 1);
+        const nextSerieIdx = serieIdx + 1;
+        const isLastS = nextSerieIdx >= groupSeries;
+        // L'esercizio successivo al gruppo è sempre exIdx+1 (sia che siamo su A sia su B)
+        const nextGroupExIdx = exIdx + 1;
+        const isLastEx = nextGroupExIdx >= esercizi.length;
+
+        if (isLastS && isLastEx) {
+          // Ultima serie + ultimo esercizio → fine workout (dopo recupero)
+          afterRestRef.current = { type: 'finish' };
+        } else if (isLastS) {
+          // Ultima serie del gruppo → vai al gruppo successivo, serie 0
+          afterRestRef.current = { type: 'next', exIdx: nextGroupExIdx, serieIdx: 0 };
+        } else {
+          // Non è l'ultima serie → torna ad A con serieIdx incrementato
+          const firstOfGroup = isPairSecond ? exIdx - 1 : exIdx;
+          afterRestRef.current = { type: 'next', exIdx: firstOfGroup, serieIdx: nextSerieIdx };
+        }
+
         const t = ex.recupero || 60;
         setRestTime(t);
         targetTimeRef.current = Date.now() + t * 1000;
