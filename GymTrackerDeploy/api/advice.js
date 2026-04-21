@@ -84,7 +84,13 @@ ${JSON.stringify((history || []).slice(0, 10).map(h => ({ data: new Date(h.date)
     if (!groqRes.ok) {
       const errorData = await groqRes.text();
       console.error('Groq API error:', errorData);
-      return res.status(groqRes.status).json({ error: 'Errore dalla API di Groq.' });
+      // Restituiamo il dettaglio dell'errore Groq per poter diagnosticare
+      let groqErrMsg = 'Errore dalla API di Groq.';
+      try {
+        const parsed = JSON.parse(errorData);
+        groqErrMsg = parsed?.error?.message || parsed?.error || groqErrMsg;
+      } catch { }
+      return res.status(groqRes.status).json({ error: `Groq: ${groqErrMsg}` });
     }
 
     const data = await groqRes.json();
